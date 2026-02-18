@@ -1,0 +1,200 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+    MessageSquare,
+    Megaphone,
+    Users,
+    BarChart3,
+    ChevronLeft,
+    ChevronRight,
+    MessageCircle,
+    Phone,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { useAppStore } from "@/lib/store";
+
+const navItems = [
+    { href: "/", label: "Inbox", icon: MessageSquare },
+    { href: "/broadcast", label: "Broadcast", icon: Megaphone },
+    { href: "/contacts", label: "Contacts", icon: Users },
+    { href: "/analytics", label: "Analytics", icon: BarChart3 },
+];
+
+export function Sidebar() {
+    const pathname = usePathname();
+    const {
+        sidebarOpen,
+        toggleSidebar,
+        numbers,
+        activeNumber,
+        setActiveNumber,
+    } = useAppStore();
+
+    return (
+        <aside
+            className={cn(
+                "flex flex-col h-screen bg-white border-r border-slate-200 transition-all duration-300 ease-in-out relative z-30",
+                sidebarOpen ? "w-[240px]" : "w-[68px]"
+            )}
+        >
+            {/* Logo */}
+            <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-200">
+                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex-shrink-0">
+                    <MessageCircle className="w-5 h-5" />
+                </div>
+                {sidebarOpen && (
+                    <span className="font-bold text-lg text-slate-900 tracking-tight">
+                        WA<span className="text-emerald-600">CRM</span>
+                    </span>
+                )}
+            </div>
+
+            {/* Number Selector */}
+            {numbers.length > 0 && (
+                <div className="px-3 py-3 border-b border-slate-100">
+                    {sidebarOpen ? (
+                        <Select
+                            value={activeNumber?.number || ""}
+                            onValueChange={(val) => {
+                                const num = numbers.find((n) => n.number === val);
+                                if (num) setActiveNumber(num);
+                            }}
+                        >
+                            <SelectTrigger className="w-full h-9 text-sm bg-slate-50 border-slate-200">
+                                <div className="flex items-center gap-2">
+                                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                                    <SelectValue placeholder="Select number" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {numbers.map((num) => (
+                                    <SelectItem key={num.id} value={num.number}>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{num.label}</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                +{num.number}
+                                            </span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    ) : (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center justify-center w-10 h-9 rounded-md bg-slate-50 border border-slate-200 cursor-pointer mx-auto">
+                                    <Phone className="w-4 h-4 text-emerald-600" />
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                {activeNumber
+                                    ? `${activeNumber.label} (+${activeNumber.number})`
+                                    : "No number selected"}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+            )}
+
+            {/* Nav */}
+            <nav className="flex-1 flex flex-col gap-1 px-3 py-4">
+                {navItems.map((item) => {
+                    const isActive =
+                        item.href === "/"
+                            ? pathname === "/"
+                            : pathname.startsWith(item.href);
+                    const Icon = item.icon;
+
+                    const link = (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                                isActive
+                                    ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100"
+                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                            )}
+                        >
+                            <Icon
+                                className={cn(
+                                    "w-5 h-5 flex-shrink-0",
+                                    isActive ? "text-emerald-600" : "text-slate-400"
+                                )}
+                            />
+                            {sidebarOpen && <span>{item.label}</span>}
+                        </Link>
+                    );
+
+                    if (!sidebarOpen) {
+                        return (
+                            <Tooltip key={item.href}>
+                                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                                <TooltipContent side="right">{item.label}</TooltipContent>
+                            </Tooltip>
+                        );
+                    }
+
+                    return link;
+                })}
+            </nav>
+
+            <Separator />
+
+            {/* User Profile */}
+            <div className="p-3">
+                <div
+                    className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5",
+                        sidebarOpen ? "" : "justify-center"
+                    )}
+                >
+                    <Avatar className="w-8 h-8 flex-shrink-0">
+                        <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xs font-semibold">
+                            PM
+                        </AvatarFallback>
+                    </Avatar>
+                    {sidebarOpen && (
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-medium text-slate-900 truncate">
+                                Pradeep M
+                            </span>
+                            <span className="text-xs text-slate-500">Admin</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Toggle Button */}
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="absolute -right-3 top-20 w-6 h-6 rounded-full border border-slate-200 bg-white shadow-sm hover:bg-slate-50 z-40"
+            >
+                {sidebarOpen ? (
+                    <ChevronLeft className="w-3 h-3" />
+                ) : (
+                    <ChevronRight className="w-3 h-3" />
+                )}
+            </Button>
+        </aside>
+    );
+}

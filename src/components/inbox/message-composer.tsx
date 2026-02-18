@@ -1,0 +1,219 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import {
+    Send,
+    Paperclip,
+    StickyNote,
+    AlertTriangle,
+    FileText,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn, isSessionExpired } from "@/lib/utils";
+import { useSendMessage } from "@/lib/hooks";
+import { useAppStore } from "@/lib/store";
+import { TemplatePickerDialog } from "./template-picker-dialog";
+import type { Conversation } from "@/lib/types";
+
+interface MessageComposerProps {
+    conversation: Conversation;
+}
+
+export function MessageComposer({ conversation }: MessageComposerProps) {
+    const [text, setText] = useState("");
+    const [isInternalNote, setIsInternalNote] = useState(false);
+    const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+    const sendMessage = useSendMessage();
+    const activeNumber = useAppStore((s) => s.activeNumber);
+
+    const sessionExpired = isSessionExpired(conversation.lastIncomingTimestamp);
+
+    const handleSend = (e: FormEvent) => {
+        e.preventDefault();
+        if (!text.trim() || sessionExpired) return;
+
+        if (isInternalNote) {
+            // Internal notes are saved locally only (in a real app, saved to DB)
+            setText("");
+            return;
+        }
+
+        sendMessage.mutate({
+            to: conversation.contact.phone,
+            contentType: "text",
+            text: text.trim(),
+            conversationId: conversation.id,
+            integratedNumber: activeNumber?.number || conversation.integratedNumber,
+        });
+        setText("");
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSend(e);
+        }
+    };
+
+    return (
+        <>
+            <div
+                className={cn(
+                    "border-t border-slate-200 bg-white px-4 py-3",
+                    isInternalNote && "bg-amber-50/50"
+                )}
+            >
+                {/* Session Expired Warning */}
+                {sessionExpired && !isInternalNote && (
+                    <div className="flex items-center gap-3 px-4 py-3 mb-3 rounded-xl bg-amber-50 border border-amber-200">
+                        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-amber-800">
+                                Session Expired
+                            </p>
+                            <p className="text-xs text-amber-600 mt-0.5">
+                                The 24-hour window has passed. You can only send pre-approved templates.
+                            </p>
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setTemplateDialogOpen(true)}
+                            className="flex-shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100 text-xs h-8"
+                        >
+                            <FileText className="w-3.5 h-3.5 mr-1.5" />
+                            Send Template
+                        </Button>
+                    </div>
+                )}
+
+                {/* Internal Note Toggle */}
+                <div className="flex items-center gap-2 mb-2">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                type="button"
+                                variant={isInternalNote ? "default" : "ghost"}
+                                size="sm"
+                                onClick={() => setIsInternalNote(!isInternalNote)}
+                                className={cn(
+                                    "h-7 text-xs gap-1.5",
+                                    isInternalNote
+                                        ? "bg-amber-500 hover:bg-amber-600 text-white"
+                                        : "text-slate-500 hover:text-slate-700"
+                                )}
+                            >
+                                <StickyNote className="w-3.5 h-3.5" />
+                                {isInternalNote ? "Writing Note" : "Note"}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            Internal notes are NOT sent to the customer
+                        </TooltipContent>
+                    </Tooltip>
+
+                    {isInternalNote && (
+                        <Badge
+                            variant="secondary"
+                            className="bg-amber-100 text-amber-700 text-[10px] h-5"
+                        >
+                            Only visible to your team
+                        </Badge>
+                    )}
+                </div>
+
+                {/* Composer */}
+                <form onSubmit={handleSend} className="flex items-end gap-2">
+                    <div className="flex-1 relative">
+                        <Textarea
+                            value={text}
+                            onChange={(e) => setText(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder={
+                                sessionExpired && !isInternalNote
+                                    ? "Session expired — use a template or write a note"
+                                    : isInternalNote
+                                        ? "Write an internal note..."
+                                        : "Type a message..."
+                            }
+                            disabled={sessionExpired && !isInternalNote}
+                            className={cn(
+                                "min-h-[44px] max-h-[120px] resize-none text-sm pr-10",
+                                isInternalNote && "border-amber-200 bg-amber-50/50",
+                                sessionExpired &&
+                                !isInternalNote &&
+                                "opacity-60 cursor-not-allowed"
+                            )}
+                            rows={1}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pb-0.5">
+                        {!sessionExpired && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-9 w-9 text-slate-400 hover:text-slate-600"
+                                    >
+                                        <Paperclip className="w-4.5 h-4.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Attach file</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {!sessionExpired && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setTemplateDialogOpen(true)}
+                                        className="h-9 w-9 text-slate-400 hover:text-slate-600"
+                                    >
+                                        <FileText className="w-4.5 h-4.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Send template</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        <Button
+                            type="submit"
+                            size="icon"
+                            disabled={
+                                !text.trim() || (sessionExpired && !isInternalNote) || sendMessage.isPending
+                            }
+                            className={cn(
+                                "h-9 w-9 rounded-lg",
+                                isInternalNote
+                                    ? "bg-amber-500 hover:bg-amber-600"
+                                    : "bg-emerald-500 hover:bg-emerald-600"
+                            )}
+                        >
+                            <Send className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </form>
+            </div>
+
+            {/* Template Picker Dialog */}
+            <TemplatePickerDialog
+                open={templateDialogOpen}
+                onOpenChange={setTemplateDialogOpen}
+                conversation={conversation}
+            />
+        </>
+    );
+}
