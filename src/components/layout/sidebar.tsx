@@ -13,6 +13,7 @@ import {
     Phone,
     IndianRupee,
     Settings,
+    FileText,
     LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/components/auth-provider";
+import { ReminderPopover } from "./reminder-popover";
 
 const navItems = [
     { href: "/", label: "Inbox", icon: MessageSquare },
@@ -56,7 +58,10 @@ export function Sidebar() {
     const allNavItems = [
         ...navItems,
         ...(user?.role === "admin"
-            ? [{ href: "/settings", label: "Settings", icon: Settings }]
+            ? [
+                { href: "/templates", label: "Templates", icon: FileText },
+                { href: "/settings", label: "Settings", icon: Settings },
+            ]
             : []),
     ];
 
@@ -168,6 +173,11 @@ export function Sidebar() {
                     return link;
                 })}
             </nav>
+
+            {/* Reminder Popover */}
+            <div className={cn("px-3 pb-2", sidebarOpen ? "" : "flex justify-center")}>
+                <ReminderPopover />
+            </div>
 
             <Separator />
 

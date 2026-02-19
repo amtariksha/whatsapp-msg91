@@ -43,6 +43,9 @@ export interface Conversation {
   contact: Contact;
   integratedNumber: string; // which WA number this conversation belongs to
   status: ConversationStatus;
+  assignedTo?: string;
+  assignedAt?: string;
+  assignedUser?: { id: string; name: string };
   lastMessage?: string;
   lastMessageTime: string;
   lastIncomingTimestamp: string;
@@ -145,4 +148,57 @@ export interface IncomingMessageEvent {
 export interface StatusUpdateEvent {
   messageId: string;
   status: MessageStatus;
+}
+
+// ─── Quick Reply ────────────────────────────────────────────
+export interface QuickReply {
+  id: string;
+  title: string;
+  body: string;
+  shortcut?: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
+// ─── Reminder ──────────────────────────────────────────────
+export interface Reminder {
+  id: string;
+  conversationId: string;
+  userId: string;
+  remindAt: string;
+  note?: string;
+  isDismissed: boolean;
+  createdAt: string;
+  // joined fields
+  contactName?: string;
+  contactPhone?: string;
+}
+
+// ─── Local Template ────────────────────────────────────────
+export type TemplateStatus = "draft" | "submitted" | "approved" | "rejected";
+
+export interface LocalTemplate {
+  id: string;
+  name: string;
+  category: string;
+  language: string;
+  headerText?: string;
+  bodyText: string;
+  footerText?: string;
+  buttons: Record<string, unknown>[];
+  status: TemplateStatus;
+  msg91TemplateId?: string;
+  submittedAt?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── User (for assignment dropdowns etc.) ──────────────────
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
 }

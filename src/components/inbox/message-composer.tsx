@@ -7,6 +7,7 @@ import {
     StickyNote,
     AlertTriangle,
     FileText,
+    Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,7 +18,8 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn, isSessionExpired } from "@/lib/utils";
-import { useSendMessage } from "@/lib/hooks";
+import { useSendMessage, useQuickReplies } from "@/lib/hooks";
+import type { QuickReply } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { TemplatePickerDialog } from "./template-picker-dialog";
 import type { Conversation } from "@/lib/types";
@@ -30,10 +32,30 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     const [text, setText] = useState("");
     const [isInternalNote, setIsInternalNote] = useState(false);
     const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+    const [showQuickReplies, setShowQuickReplies] = useState(false);
     const sendMessage = useSendMessage();
+    const { data: quickReplies } = useQuickReplies();
     const activeNumber = useAppStore((s) => s.activeNumber);
 
     const sessionExpired = isSessionExpired(conversation.lastIncomingTimestamp);
+
+    // Filter quick replies by /shortcut
+    const isSlashMode = text.startsWith("/") && text.length > 1;
+    const slashFilter = isSlashMode ? text.slice(1).toLowerCase() : "";
+    const filteredQuickReplies = (quickReplies || []).filter((qr: QuickReply) => {
+        if (isSlashMode) {
+            return (
+                qr.shortcut?.toLowerCase().includes(slashFilter) ||
+                qr.title.toLowerCase().includes(slashFilter)
+            );
+        }
+        return true;
+    });
+
+    const handleSelectQuickReply = (qr: QuickReply) => {
+        setText(qr.body);
+        setShowQuickReplies(false);
+    };
 
     const handleSend = (e: FormEvent) => {
         e.preventDefault();
@@ -170,6 +192,46 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                                 </TooltipTrigger>
                                 <TooltipContent>Attach file</TooltipContent>
                             </Tooltip>
+                        )}
+
+                        {!sessionExpired && (
+                            <div className="relative">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => setShowQuickReplies(!showQuickReplies)}
+                                            className="h-9 w-9 text-slate-400 hover:text-amber-500"
+                                        >
+                                            <Zap className="w-4.5 h-4.5" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Quick replies</TooltipContent>
+                                </Tooltip>
+
+                                {(showQuickReplies || isSlashMode) && filteredQuickReplies.length > 0 && (
+                                    <div className="absolute bottom-full mb-2 right-0 w-64 bg-white rounded-lg shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                        {filteredQuickReplies.map((qr: QuickReply) => (
+                                            <button
+                                                key={qr.id}
+                                                type="button"
+                                                onClick={() => handleSelectQuickReply(qr)}
+                                                className="w-full text-left px-3 py-2 hover:bg-emerald-50 border-b border-slate-50 last:border-0"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-medium text-slate-800">{qr.title}</span>
+                                                    {qr.shortcut && (
+                                                        <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 rounded">/{qr.shortcut}</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 truncate mt-0.5">{qr.body}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
 
                         {!sessionExpired && (

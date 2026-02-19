@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import {
     Check,
     CheckCheck,
@@ -8,15 +8,26 @@ import {
     AlertCircle,
     FileText,
     Image as ImageIcon,
+    UserPlus,
+    XCircle,
+    Bell,
+    ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useConversation, useUpdateConversationStatus } from "@/lib/hooks";
+import {
+    useConversation,
+    useUpdateConversationStatus,
+    useAssignConversation,
+    useUsers,
+} from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/components/auth-provider";
 import { MessageComposer } from "./message-composer";
+import { ReminderDialog } from "./reminder-dialog";
 import type { Message, MessageStatus } from "@/lib/types";
 
 function StatusIcon({ status }: { status: MessageStatus }) {
@@ -129,7 +140,12 @@ export function ChatWindow() {
         activeConversationId
     );
     const updateStatus = useUpdateConversationStatus();
+    const assignConversation = useAssignConversation();
+    const { data: users } = useUsers();
+    const { user: currentUser } = useAuth();
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [showAssignMenu, setShowAssignMenu] = useState(false);
+    const [showReminderDialog, setShowReminderDialog] = useState(false);
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {
@@ -137,6 +153,14 @@ export function ChatWindow() {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [conversation?.messages]);
+
+    // Close assignment menu when clicking outside
+    useEffect(() => {
+        if (!showAssignMenu) return;
+        const handleClick = () => setShowAssignMenu(false);
+        document.addEventListener("click", handleClick);
+        return () => document.removeEventListener("click", handleClick);
+    }, [showAssignMenu]);
 
     if (!activeConversationId) {
         return (
@@ -189,6 +213,16 @@ export function ChatWindow() {
         .toUpperCase()
         .slice(0, 2);
 
+    const isAssignedToMe = conversation.assignedTo === currentUser?.id;
+    const isAdmin = currentUser?.role === "admin";
+    const canClose = isAssignedToMe || isAdmin;
+    const activeUsers = users?.filter((u) => u.isActive) || [];
+
+    const handleAssign = (userId: string | null) => {
+        assignConversation.mutate({ id: conversation.id, userId });
+        setShowAssignMenu(false);
+    };
+
     return (
         <div className="flex-1 flex flex-col h-full bg-slate-50/30">
             {/* Header */}
@@ -213,6 +247,91 @@ export function ChatWindow() {
                 </button>
 
                 <div className="flex items-center gap-2">
+                    {/* Assigned badge */}
+                    {conversation.assignedUser && (
+                        <Badge
+                            variant="secondary"
+                            className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200"
+                        >
+                            <UserPlus className="w-3 h-3 mr-1" />
+                            {conversation.assignedUser.name}
+                        </Badge>
+                    )}
+
+                    {/* Assignment dropdown */}
+                    <div className="relative">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowAssignMenu(!showAssignMenu);
+                            }}
+                            className="text-xs h-8 gap-1"
+                        >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Assign
+                            <ChevronDown className="w-3 h-3" />
+                        </Button>
+
+                        {showAssignMenu && (
+                            <div
+                                className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                {/* Assign to me */}
+                                {!isAssignedToMe && currentUser && (
+                                    <button
+                                        onClick={() => handleAssign(currentUser.id)}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 text-emerald-700 font-medium flex items-center gap-2"
+                                    >
+                                        <UserPlus className="w-3.5 h-3.5" />
+                                        Assign to me
+                                    </button>
+                                )}
+
+                                {conversation.assignedTo && (
+                                    <button
+                                        onClick={() => handleAssign(null)}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+                                    >
+                                        <XCircle className="w-3.5 h-3.5" />
+                                        Unassign
+                                    </button>
+                                )}
+
+                                <div className="border-t border-slate-100 my-1" />
+
+                                {activeUsers
+                                    .filter((u) => u.id !== conversation.assignedTo)
+                                    .map((u) => (
+                                        <button
+                                            key={u.id}
+                                            onClick={() => handleAssign(u.id)}
+                                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                                        >
+                                            {u.name}
+                                            <span className="text-xs text-slate-400 ml-1">
+                                                ({u.role})
+                                            </span>
+                                        </button>
+                                    ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Reminder button */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowReminderDialog(true)}
+                        className="text-xs h-8"
+                        title="Set Reminder"
+                    >
+                        <Bell className="w-3.5 h-3.5" />
+                    </Button>
+
+                    {/* Status badge */}
                     <Badge
                         variant="secondary"
                         className={cn(
@@ -224,25 +343,49 @@ export function ChatWindow() {
                     >
                         {conversation.status === "open" ? "Open" : "Resolved"}
                     </Badge>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                            updateStatus.mutate({
-                                id: conversation.id,
-                                status:
-                                    conversation.status === "open" ? "resolved" : "open",
-                            })
-                        }
-                        className={cn(
-                            "text-xs h-8",
-                            conversation.status === "open"
-                                ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                                : "text-blue-700 border-blue-200 hover:bg-blue-50"
-                        )}
-                    >
-                        {conversation.status === "open" ? "Resolve" : "Reopen"}
-                    </Button>
+
+                    {/* Close / Reopen button */}
+                    {conversation.status === "open" ? (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!canClose}
+                            onClick={() =>
+                                updateStatus.mutate({
+                                    id: conversation.id,
+                                    status: "resolved",
+                                })
+                            }
+                            className={cn(
+                                "text-xs h-8",
+                                canClose
+                                    ? "text-red-600 border-red-200 hover:bg-red-50"
+                                    : "text-slate-400 border-slate-200 cursor-not-allowed"
+                            )}
+                            title={
+                                canClose
+                                    ? "Close this conversation"
+                                    : "Only the assigned user or admin can close"
+                            }
+                        >
+                            <XCircle className="w-3.5 h-3.5 mr-1" />
+                            Close
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                                updateStatus.mutate({
+                                    id: conversation.id,
+                                    status: "open",
+                                })
+                            }
+                            className="text-xs h-8 text-blue-700 border-blue-200 hover:bg-blue-50"
+                        >
+                            Reopen
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -257,6 +400,14 @@ export function ChatWindow() {
 
             {/* Composer */}
             <MessageComposer conversation={conversation} />
+
+            {/* Reminder Dialog */}
+            {showReminderDialog && (
+                <ReminderDialog
+                    conversationId={conversation.id}
+                    onClose={() => setShowReminderDialog(false)}
+                />
+            )}
         </div>
     );
 }

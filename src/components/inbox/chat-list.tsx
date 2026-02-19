@@ -167,6 +167,14 @@ function ConversationItem({
                         Resolved
                     </Badge>
                 )}
+                {conversation.assignedTo && (
+                    <Badge
+                        variant="secondary"
+                        className="mt-1 text-[10px] h-4 bg-indigo-50 text-indigo-600 border border-indigo-100"
+                    >
+                        Assigned
+                    </Badge>
+                )}
             </div>
         </button>
     );

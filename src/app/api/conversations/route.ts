@@ -30,6 +30,8 @@ function mapConversation(row: Record<string, unknown>) {
         contact: contact as { id: string; name: string; phone: string; email?: string; tags: string[]; createdAt: string },
         integratedNumber: row.integrated_number as string,
         status: row.status as string,
+        assignedTo: (row.assigned_to as string) || undefined,
+        assignedAt: (row.assigned_at as string) || undefined,
         lastMessage: (row.last_message as string) || "",
         lastMessageTime: row.last_message_time as string,
         lastIncomingTimestamp: (row.last_incoming_timestamp as string) || (row.last_message_time as string),

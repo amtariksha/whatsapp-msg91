@@ -19,6 +19,8 @@ create table if not exists conversations (
   contact_id uuid references contacts(id) on delete cascade,
   integrated_number text not null,
   status text default 'open' check (status in ('open','resolved')),
+  assigned_to uuid references users(id) on delete set null,
+  assigned_at timestamptz,
   last_message text,
   last_message_time timestamptz default now(),
   last_incoming_timestamp timestamptz,
@@ -72,15 +74,58 @@ create table if not exists users (
   created_at timestamptz default now()
 );
 
+-- 6. Quick Replies (admin-configured canned responses)
+create table if not exists quick_replies (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  body text not null,
+  shortcut text,
+  created_by uuid references users(id),
+  created_at timestamptz default now()
+);
+
+-- 7. Reminders (per-conversation follow-up alerts)
+create table if not exists reminders (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid references conversations(id) on delete cascade,
+  user_id uuid references users(id) on delete cascade,
+  remind_at timestamptz not null,
+  note text,
+  is_dismissed boolean default false,
+  created_at timestamptz default now()
+);
+
+-- 8. Local Templates (create & sync with MSG91)
+create table if not exists templates_local (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  category text default 'UTILITY',
+  language text default 'en',
+  header_text text,
+  body_text text not null,
+  footer_text text,
+  buttons jsonb default '[]',
+  status text default 'draft',
+  msg91_template_id text,
+  submitted_at timestamptz,
+  created_by uuid references users(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- ─── Indexes ───────────────────────────────────────────────
 create index if not exists idx_conversations_contact on conversations(contact_id);
 create index if not exists idx_conversations_status on conversations(status);
+create index if not exists idx_conversations_assigned on conversations(assigned_to);
 create index if not exists idx_messages_conversation on messages(conversation_id);
 create index if not exists idx_messages_created on messages(created_at);
 create index if not exists idx_payments_contact on payments(contact_id);
 create index if not exists idx_payments_status on payments(payment_status);
 create index if not exists idx_contacts_phone on contacts(phone);
 create index if not exists idx_users_email on users(email);
+create index if not exists idx_reminders_user on reminders(user_id);
+create index if not exists idx_reminders_remind_at on reminders(remind_at);
+create index if not exists idx_quick_replies_shortcut on quick_replies(shortcut);
 
 -- ─── RLS ───────────────────────────────────────────────────
 alter table contacts enable row level security;
@@ -88,6 +133,9 @@ alter table conversations enable row level security;
 alter table messages enable row level security;
 alter table payments enable row level security;
 alter table users enable row level security;
+alter table quick_replies enable row level security;
+alter table reminders enable row level security;
+alter table templates_local enable row level security;
 
 -- Allow all operations (single-tenant, service-role key bypasses RLS)
 create policy "Allow all on contacts" on contacts for all using (true) with check (true);
@@ -95,4 +143,7 @@ create policy "Allow all on conversations" on conversations for all using (true)
 create policy "Allow all on messages" on messages for all using (true) with check (true);
 create policy "Allow all on payments" on payments for all using (true) with check (true);
 create policy "Allow all on users" on users for all using (true) with check (true);
+create policy "Allow all on quick_replies" on quick_replies for all using (true) with check (true);
+create policy "Allow all on reminders" on reminders for all using (true) with check (true);
+create policy "Allow all on templates_local" on templates_local for all using (true) with check (true);
 

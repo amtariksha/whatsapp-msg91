@@ -120,6 +120,29 @@ export function useUpdateConversationStatus() {
     });
 }
 
+// ─── Assign Conversation ───────────────────────────────────
+export function useAssignConversation() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ id, userId }: { id: string; userId: string | null }) =>
+            api.assignConversation(id, userId),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            queryClient.invalidateQueries({ queryKey: ["conversation"] });
+        },
+    });
+}
+
+// ─── Users ─────────────────────────────────────────────────
+export function useUsers() {
+    return useQuery({
+        queryKey: ["users"],
+        queryFn: api.getUsers,
+        staleTime: 60 * 1000,
+    });
+}
+
 // ─── Contacts ──────────────────────────────────────────────
 export function useContacts(search?: string) {
     return useQuery({
@@ -147,6 +170,111 @@ export function useTemplates() {
         queryKey: ["templates"],
         queryFn: api.getTemplates,
         staleTime: 5 * 60 * 1000,
+    });
+}
+
+// ─── Quick Replies ─────────────────────────────────────────
+export function useQuickReplies() {
+    return useQuery({
+        queryKey: ["quick-replies"],
+        queryFn: api.getQuickReplies,
+    });
+}
+
+export function useCreateQuickReply() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: { title: string; body: string; shortcut?: string }) =>
+            api.createQuickReply(data),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["quick-replies"] });
+        },
+    });
+}
+
+export function useDeleteQuickReply() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => api.deleteQuickReply(id),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["quick-replies"] });
+        },
+    });
+}
+
+// ─── Reminders ─────────────────────────────────────────────
+export function useReminders() {
+    return useQuery({
+        queryKey: ["reminders"],
+        queryFn: api.getReminders,
+        refetchInterval: 30000, // check every 30s
+    });
+}
+
+export function useCreateReminder() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: { conversationId: string; remindAt: string; note?: string }) =>
+            api.createReminder(data),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["reminders"] });
+        },
+    });
+}
+
+export function useDismissReminder() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => api.dismissReminder(id),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["reminders"] });
+        },
+    });
+}
+
+// ─── Local Templates ───────────────────────────────────────
+export function useLocalTemplates() {
+    return useQuery({
+        queryKey: ["local-templates"],
+        queryFn: api.getLocalTemplates,
+    });
+}
+
+export function useCreateLocalTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: {
+            name: string;
+            category: string;
+            language: string;
+            headerText?: string;
+            bodyText: string;
+            footerText?: string;
+        }) => api.createLocalTemplate(data),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["local-templates"] });
+        },
+    });
+}
+
+export function useDeleteLocalTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => api.deleteLocalTemplate(id),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["local-templates"] });
+        },
+    });
+}
+
+export function useSyncTemplates() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: () => api.syncTemplates(),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["local-templates"] });
+            queryClient.invalidateQueries({ queryKey: ["templates"] });
+        },
     });
 }
 
