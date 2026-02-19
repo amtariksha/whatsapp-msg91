@@ -290,3 +290,16 @@ export async function createPayment(
     if (!res.ok) throw new Error("Failed to create payment");
     return res.json();
 }
+
+export async function updatePayment(
+    id: string,
+    payload: { paymentStatus?: string; transactionRef?: string }
+): Promise<Payment> {
+    const res = await fetch(`${BASE_URL}/api/payments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to update payment");
+    return res.json();
+}

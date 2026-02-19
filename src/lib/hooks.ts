@@ -303,3 +303,15 @@ export function useCreatePayment() {
         },
     });
 }
+
+export function useUpdatePayment() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ id, ...payload }: { id: string; paymentStatus?: string; transactionRef?: string }) =>
+            api.updatePayment(id, payload),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+        },
+    });
+}

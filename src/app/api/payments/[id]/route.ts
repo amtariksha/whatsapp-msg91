@@ -30,6 +30,7 @@ export async function GET(
         razorpayLinkId: data.razorpay_link_id,
         razorpayPaymentId: data.razorpay_payment_id,
         shortUrl: data.short_url,
+        transactionRef: data.transaction_ref,
         messageStatus: data.message_status,
         paymentStatus: data.payment_status,
         createdBy: data.created_by,
@@ -54,6 +55,8 @@ export async function PATCH(
     if (body.messageStatus) updateData.message_status = body.messageStatus;
     if (body.razorpayPaymentId)
         updateData.razorpay_payment_id = body.razorpayPaymentId;
+    if (body.transactionRef !== undefined)
+        updateData.transaction_ref = body.transactionRef;
 
     const { data, error } = await supabaseAdmin
         .from("payments")
@@ -72,6 +75,8 @@ export async function PATCH(
     return NextResponse.json({
         id: data.id,
         paymentStatus: data.payment_status,
+        transactionRef: data.transaction_ref,
+        shortUrl: data.short_url,
         updatedAt: data.updated_at,
     });
 }

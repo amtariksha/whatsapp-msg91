@@ -92,6 +92,7 @@ export interface Payment {
   razorpayLinkId?: string;
   razorpayPaymentId?: string;
   shortUrl?: string;
+  transactionRef?: string;
   messageStatus: string;
   paymentStatus: PaymentStatus;
   createdBy: string;

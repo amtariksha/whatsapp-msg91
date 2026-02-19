@@ -14,6 +14,7 @@ function mapPayment(row: Record<string, unknown>) {
         razorpayLinkId: row.razorpay_link_id || undefined,
         razorpayPaymentId: row.razorpay_payment_id || undefined,
         shortUrl: row.short_url || undefined,
+        transactionRef: row.transaction_ref || undefined,
         messageStatus: row.message_status || "pending",
         paymentStatus: row.payment_status || "created",
         createdBy: row.created_by || "Sales",
