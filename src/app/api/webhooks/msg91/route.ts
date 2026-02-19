@@ -6,27 +6,48 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
 
+        // Log the full payload for debugging
+        console.log("[MSG91 Webhook] Received payload:", JSON.stringify(body));
+
         /*
-         * MSG91 sends inbound webhooks with variable payloads.
-         * Common fields (may vary):
-         *   - from / sender:   sender phone number
-         *   - to / receiver:   your WhatsApp number
-         *   - message / text:  message body
-         *   - type:            text / image / document etc.
-         *   - media_url:       for image/document
-         *   - timestamp
+         * MSG91 "On Inbound Request Received" payload fields:
+         *   customerNumber  — sender phone (e.g. "919876543210")
+         *   content         — message text
+         *   requestId       — MSG91 request ID
+         *   eventName       — event type
+         *   crqid           — conversation request ID
+         *   companyId       — MSG91 company ID
+         *   requestedAt     — timestamp
+         *   reason          — reason field
+         *   uuid            — unique message ID
+         *
+         * We also handle alternative field names for flexibility.
          */
         const senderPhone =
-            body.from || body.sender || body.mobile || body.phone || "";
+            body.customerNumber ||
+            body.from ||
+            body.sender ||
+            body.mobile ||
+            body.phone ||
+            "";
         const receiverNumber =
-            body.to || body.receiver || body.integrated_number || "";
+            body.to ||
+            body.receiver ||
+            body.integrated_number ||
+            "";
         const messageBody =
-            body.message || body.text || body.body || body.content || "";
+            body.content ||
+            body.message ||
+            body.text ||
+            body.body ||
+            "";
         const contentType = body.type || "text";
         const mediaUrl = body.media_url || body.mediaUrl || null;
         const fileName = body.file_name || body.fileName || null;
+        const externalId = body.uuid || body.requestId || null;
 
         if (!senderPhone) {
+            console.log("[MSG91 Webhook] No sender phone found. Payload keys:", Object.keys(body));
             return NextResponse.json(
                 { error: "No sender phone found in payload" },
                 { status: 400 }
@@ -35,6 +56,7 @@ export async function POST(request: NextRequest) {
 
         // Normalize phone (remove + prefix if present)
         const normalizedPhone = senderPhone.replace(/^\+/, "");
+        console.log(`[MSG91 Webhook] Processing message from ${normalizedPhone}`);
 
         // ─── 1. Upsert Contact ─────────────────────────────
         let { data: contact } = await supabaseAdmin
@@ -54,10 +76,11 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (contactError) {
-                console.error("Upsert contact error:", contactError);
+                console.error("[MSG91 Webhook] Upsert contact error:", contactError);
                 return NextResponse.json({ error: "Failed to upsert contact" }, { status: 500 });
             }
             contact = newContact;
+            console.log(`[MSG91 Webhook] Created contact: ${contact!.id}`);
         }
 
         // ─── 2. Upsert Conversation ────────────────────────
@@ -84,10 +107,11 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (convError) {
-                console.error("Create conversation error:", convError);
+                console.error("[MSG91 Webhook] Create conversation error:", convError);
                 return NextResponse.json({ error: "Failed to create conversation" }, { status: 500 });
             }
             conversation = newConv;
+            console.log(`[MSG91 Webhook] Created conversation: ${conversation!.id}`);
         } else {
             // Update existing conversation
             await supabaseAdmin
@@ -100,7 +124,7 @@ export async function POST(request: NextRequest) {
                 })
                 .eq("id", conversation.id);
 
-            // Increment unread count via raw SQL-style update
+            // Increment unread count
             const { data: convData } = await supabaseAdmin
                 .from("conversations")
                 .select("unread_count")
@@ -124,16 +148,18 @@ export async function POST(request: NextRequest) {
             media_url: mediaUrl,
             file_name: fileName,
             status: "delivered",
+            external_id: externalId,
         });
 
         if (msgError) {
-            console.error("Insert message error:", msgError);
+            console.error("[MSG91 Webhook] Insert message error:", msgError);
             return NextResponse.json({ error: "Failed to insert message" }, { status: 500 });
         }
 
+        console.log(`[MSG91 Webhook] Message saved for conversation ${conversation!.id}`);
         return NextResponse.json({ success: true, conversationId: conversation!.id });
     } catch (err) {
-        console.error("MSG91 webhook error:", err);
+        console.error("[MSG91 Webhook] Error:", err);
         return NextResponse.json(
             { error: "Invalid payload" },
             { status: 400 }
