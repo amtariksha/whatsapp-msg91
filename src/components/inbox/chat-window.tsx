@@ -14,7 +14,6 @@ import {
     ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -390,13 +389,13 @@ export function ChatWindow() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 px-5 py-4" ref={scrollRef}>
+            <div className="flex-1 overflow-y-auto px-5 py-4" ref={scrollRef}>
                 <div className="space-y-1">
                     {conversation.messages.map((msg) => (
                         <MessageBubble key={msg.id} message={msg} />
                     ))}
                 </div>
-            </ScrollArea>
+            </div>
 
             {/* Composer */}
             <MessageComposer conversation={conversation} />
