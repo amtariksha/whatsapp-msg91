@@ -11,6 +11,9 @@ import {
     ChevronRight,
     MessageCircle,
     Phone,
+    IndianRupee,
+    Settings,
+    LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -29,16 +32,19 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/components/auth-provider";
 
 const navItems = [
     { href: "/", label: "Inbox", icon: MessageSquare },
     { href: "/broadcast", label: "Broadcast", icon: Megaphone },
     { href: "/contacts", label: "Contacts", icon: Users },
+    { href: "/payments", label: "Payments", icon: IndianRupee },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 export function Sidebar() {
     const pathname = usePathname();
+    const { user, logout } = useAuth();
     const {
         sidebarOpen,
         toggleSidebar,
@@ -46,6 +52,13 @@ export function Sidebar() {
         activeNumber,
         setActiveNumber,
     } = useAppStore();
+
+    const allNavItems = [
+        ...navItems,
+        ...(user?.role === "admin"
+            ? [{ href: "/settings", label: "Settings", icon: Settings }]
+            : []),
+    ];
 
     return (
         <aside
@@ -61,7 +74,7 @@ export function Sidebar() {
                 </div>
                 {sidebarOpen && (
                     <span className="font-bold text-lg text-slate-900 tracking-tight">
-                        WA<span className="text-emerald-600">CRM</span>
+                        Swarg<span className="text-emerald-600">CRM</span>
                     </span>
                 )}
             </div>
@@ -115,7 +128,7 @@ export function Sidebar() {
 
             {/* Nav */}
             <nav className="flex-1 flex flex-col gap-1 px-3 py-4">
-                {navItems.map((item) => {
+                {allNavItems.map((item) => {
                     const isActive =
                         item.href === "/"
                             ? pathname === "/"
@@ -168,16 +181,32 @@ export function Sidebar() {
                 >
                     <Avatar className="w-8 h-8 flex-shrink-0">
                         <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xs font-semibold">
-                            PM
+                            {user?.name
+                                ?.split(" ")
+                                .map((w) => w[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase() || "??"}
                         </AvatarFallback>
                     </Avatar>
                     {sidebarOpen && (
-                        <div className="flex flex-col min-w-0">
+                        <div className="flex flex-col min-w-0 flex-1">
                             <span className="text-sm font-medium text-slate-900 truncate">
-                                Pradeep M
+                                {user?.name || "User"}
                             </span>
-                            <span className="text-xs text-slate-500">Admin</span>
+                            <span className="text-xs text-slate-500 capitalize">
+                                {user?.role || "agent"}
+                            </span>
                         </div>
+                    )}
+                    {sidebarOpen && (
+                        <button
+                            onClick={logout}
+                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            title="Logout"
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
                     )}
                 </div>
             </div>

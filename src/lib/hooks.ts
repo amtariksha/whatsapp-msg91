@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "./api";
-import type { SendMessagePayload, Message, Conversation } from "./types";
+import type { SendMessagePayload, Message, Conversation, CreatePaymentPayload } from "./types";
 import { generateId } from "./utils";
 import { useAppStore } from "./store";
 import { useEffect } from "react";
@@ -147,5 +147,31 @@ export function useTemplates() {
         queryKey: ["templates"],
         queryFn: api.getTemplates,
         staleTime: 5 * 60 * 1000,
+    });
+}
+
+// ─── Payments ──────────────────────────────────────────────
+export function usePayments(params?: {
+    status?: string;
+    from?: string;
+    to?: string;
+}) {
+    return useQuery({
+        queryKey: ["payments", params],
+        queryFn: () => api.getPayments(params),
+        refetchInterval: 15000,
+    });
+}
+
+export function useCreatePayment() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (payload: CreatePaymentPayload) =>
+            api.createPayment(payload),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        },
     });
 }

@@ -74,6 +74,47 @@ export interface BroadcastCampaign {
   recipients: string[];
 }
 
+// ─── Payment ───────────────────────────────────────────────
+export type PaymentStatus = "created" | "paid" | "unpaid" | "cancelled" | "expired";
+
+export interface Payment {
+  id: string;
+  contactId?: string;
+  conversationId?: string;
+  contactName: string;
+  phone: string;
+  amount: number;
+  currency: string;
+  description?: string;
+  razorpayLinkId?: string;
+  razorpayPaymentId?: string;
+  shortUrl?: string;
+  messageStatus: string;
+  paymentStatus: PaymentStatus;
+  createdBy: string;
+  integratedNumber?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentSummary {
+  created: { count: number; total: number };
+  paid: { count: number; total: number };
+  unpaid: { count: number; total: number };
+  cancelled: { count: number; total: number };
+}
+
+export interface CreatePaymentPayload {
+  contactName: string;
+  phone: string;
+  amount: number;
+  description?: string;
+  contactId?: string;
+  conversationId?: string;
+  integratedNumber?: string;
+  sendViaWhatsApp?: boolean;
+}
+
 // ─── API Payloads ──────────────────────────────────────────
 export interface SendTextPayload {
   to: string;

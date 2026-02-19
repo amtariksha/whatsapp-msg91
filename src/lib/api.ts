@@ -5,6 +5,9 @@ import type {
     SendMessagePayload,
     Message,
     WhatsAppNumber,
+    Payment,
+    PaymentSummary,
+    CreatePaymentPayload,
 } from "./types";
 
 const BASE_URL = "";
@@ -93,5 +96,35 @@ export async function updateContactTags(
 export async function getTemplates(): Promise<Template[]> {
     const res = await fetch(`${BASE_URL}/api/templates`);
     if (!res.ok) throw new Error("Failed to fetch templates");
+    return res.json();
+}
+
+// ─── Payments ──────────────────────────────────────────────
+export async function getPayments(params?: {
+    status?: string;
+    from?: string;
+    to?: string;
+}): Promise<{ payments: Payment[]; summary: PaymentSummary }> {
+    const searchParams = new URLSearchParams();
+    if (params?.status && params.status !== "all")
+        searchParams.set("status", params.status);
+    if (params?.from) searchParams.set("from", params.from);
+    if (params?.to) searchParams.set("to", params.to);
+    const res = await fetch(
+        `${BASE_URL}/api/payments?${searchParams.toString()}`
+    );
+    if (!res.ok) throw new Error("Failed to fetch payments");
+    return res.json();
+}
+
+export async function createPayment(
+    payload: CreatePaymentPayload
+): Promise<Payment> {
+    const res = await fetch(`${BASE_URL}/api/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to create payment");
     return res.json();
 }
