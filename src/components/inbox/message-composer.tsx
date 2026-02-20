@@ -10,6 +10,7 @@ import {
     Zap,
     X,
     Image as ImageIcon,
+    MessageSquareText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +25,9 @@ import { useSendMessage, useQuickReplies } from "@/lib/hooks";
 import type { QuickReply } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { TemplatePickerDialog } from "./template-picker-dialog";
+import { InteractiveMessageDialog } from "./interactive-message-dialog";
+import { LocationMessageDialog } from "./location-message-dialog";
+import { ContactMessageDialog } from "./contact-message-dialog";
 import type { Conversation } from "@/lib/types";
 
 interface MessageComposerProps {
@@ -34,6 +38,9 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     const [text, setText] = useState("");
     const [isInternalNote, setIsInternalNote] = useState(false);
     const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+    const [interactiveDialogOpen, setInteractiveDialogOpen] = useState(false);
+    const [locationDialogOpen, setLocationDialogOpen] = useState(false);
+    const [contactDialogOpen, setContactDialogOpen] = useState(false);
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [attachedFile, setAttachedFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -316,6 +323,57 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                             </Tooltip>
                         )}
 
+                        {!sessionExpired && !isInternalNote && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setInteractiveDialogOpen(true)}
+                                        className="h-9 w-9 text-slate-400 hover:text-indigo-500"
+                                    >
+                                        <MessageSquareText className="w-4.5 h-4.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Add Buttons / Interactive Message</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {!sessionExpired && !isInternalNote && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setLocationDialogOpen(true)}
+                                        className="h-9 w-9 text-slate-400 hover:text-indigo-500"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Share Location</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {!sessionExpired && !isInternalNote && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setContactDialogOpen(true)}
+                                        className="h-9 w-9 text-slate-400 hover:text-indigo-500"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Share Contact (vCard)</TooltipContent>
+                            </Tooltip>
+                        )}
+
                         <Button
                             type="submit"
                             size="icon"
@@ -340,6 +398,31 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                 open={templateDialogOpen}
                 onOpenChange={setTemplateDialogOpen}
                 conversation={conversation}
+            />
+
+            {/* Interactive Message Dialog */}
+            <InteractiveMessageDialog
+                open={interactiveDialogOpen}
+                onOpenChange={setInteractiveDialogOpen}
+                conversation={conversation}
+                initialText={text}
+                onSent={() => setText("")}
+            />
+
+            {/* Location Message Dialog */}
+            <LocationMessageDialog
+                open={locationDialogOpen}
+                onOpenChange={setLocationDialogOpen}
+                conversation={conversation}
+                onSent={() => { }}
+            />
+
+            {/* Contact Message Dialog */}
+            <ContactMessageDialog
+                open={contactDialogOpen}
+                onOpenChange={setContactDialogOpen}
+                conversation={conversation}
+                onSent={() => { }}
             />
         </>
     );

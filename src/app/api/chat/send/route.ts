@@ -59,6 +59,48 @@ export async function POST(request: NextRequest) {
             },
         };
         messageBody = fileName || `[${mediaType}]`;
+    } else if (contentType === "location") {
+        const { location } = body as Record<string, any>;
+        msg91Payload = {
+            integrated_number: sendFromNumber,
+            content_type: "location",
+            payload: {
+                to: phone,
+                type: "location",
+                location: {
+                    longitude: location.longitude,
+                    latitude: location.latitude,
+                    name: location.name,
+                    address: location.address,
+                },
+            },
+        };
+        messageBody = `[Location: ${location.name || location.address}]`;
+    } else if (contentType === "contact") {
+        const { contacts } = body as Record<string, any>;
+        msg91Payload = {
+            integrated_number: sendFromNumber,
+            content_type: "contacts", // MSG91 uses 'contacts' for the type
+            payload: {
+                to: phone,
+                type: "contacts",
+                contacts: contacts,
+            },
+        };
+        messageBody = `[Contact: ${contacts?.[0]?.name?.formatted_name || "Shared Contact"}]`;
+    } else if (contentType === "interactive") {
+        const { interactive, text } = body as Record<string, any>;
+        msg91Payload = {
+            integrated_number: sendFromNumber,
+            content_type: "interactive",
+            payload: {
+                to: phone,
+                type: "interactive",
+                interactive: interactive,
+            },
+        };
+        // For local storage, if it's buttons, we want to store the body text
+        messageBody = interactive?.body?.text || text || "[Interactive Message]";
     } else {
         const { text } = body;
         msg91Payload = {

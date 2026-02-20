@@ -97,94 +97,69 @@ function ConversationItem({
     isActive: boolean;
     onClick: () => void;
 }) {
-    const initials = conversation.contact.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
-
-    const colors = [
-        "from-blue-500 to-indigo-600",
-        "from-emerald-500 to-teal-600",
-        "from-orange-500 to-red-500",
-        "from-violet-500 to-purple-600",
-        "from-pink-500 to-rose-600",
-    ];
-    const colorIndex =
-        conversation.contact.name.charCodeAt(0) % colors.length;
+    // Determine contact name or fallback to phone
+    const displayName = conversation.contact.name && conversation.contact.name !== "Unknown"
+        ? conversation.contact.name
+        : `+${conversation.contact.phone}`;
 
     return (
         <button
             onClick={onClick}
             className={cn(
-                "w-full flex items-start gap-3 px-4 py-3 text-left transition-colors duration-100 hover:bg-slate-50",
-                isActive && "bg-emerald-50/70 hover:bg-emerald-50/70 border-l-2 border-l-emerald-500"
+                "w-full flex flex-col gap-1 px-4 py-3 text-left transition-colors duration-100 hover:bg-slate-50 border-b border-slate-100",
+                isActive && "bg-blue-50/50 border-l-4 border-l-blue-400 hover:bg-blue-50/50"
             )}
         >
-            <Avatar className="w-10 h-10 flex-shrink-0 mt-0.5">
-                <AvatarFallback
+            <div className="flex items-start justify-between w-full mb-1">
+                <span
                     className={cn(
-                        "bg-gradient-to-br text-white text-xs font-semibold",
-                        colors[colorIndex]
+                        "text-sm font-semibold truncate pr-2",
+                        isActive ? "text-slate-900" : "text-slate-700"
                     )}
                 >
-                    {initials}
-                </AvatarFallback>
-            </Avatar>
+                    {displayName}
+                </span>
+                <span className="text-[10px] text-slate-400 flex-shrink-0 pt-0.5">
+                    {formatChatTime(conversation.lastMessageTime)}
+                </span>
+            </div>
 
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                    <span
-                        className={cn(
-                            "text-sm font-medium truncate",
-                            isActive ? "text-emerald-900" : "text-slate-900"
-                        )}
-                    >
-                        {conversation.contact.name}
-                    </span>
-                    <div className="flex items-center gap-1.5 ml-2">
-                        {conversation.lastIncomingTimestamp && (
-                            <SessionTimer
-                                lastIncomingTimestamp={conversation.lastIncomingTimestamp}
-                                className="w-2.5 h-2.5"
-                                showLabel={false}
-                            />
-                        )}
-                        <span className="text-xs text-slate-400 flex-shrink-0">
-                            {formatChatTime(conversation.lastMessageTime)}
-                        </span>
-                    </div>
+            <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-1.5 text-slate-500 truncate pr-2">
+                    {/* Placeholder icon representing the person or subscription */}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                    <p className="text-[11px] truncate">
+                        {truncate(conversation.lastMessage || "No messages yet", 40)}
+                    </p>
                 </div>
 
-                <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-500 truncate pr-2">
-                        {truncate(conversation.lastMessage || "No messages yet", 35)}
-                    </p>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                     {conversation.unreadCount > 0 && (
-                        <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white text-[10px] h-5 min-w-5 flex items-center justify-center rounded-full px-1.5 flex-shrink-0">
+                        <Badge className="bg-amber-400 hover:bg-amber-500 text-amber-950 text-[10px] h-4 min-w-[16px] flex items-center justify-center rounded-full px-1 border-none font-bold">
                             {conversation.unreadCount}
                         </Badge>
                     )}
+                    {conversation.lastIncomingTimestamp && (
+                        <SessionTimer
+                            lastIncomingTimestamp={conversation.lastIncomingTimestamp}
+                            className="w-3 h-3 text-slate-300"
+                            showLabel={false}
+                        />
+                    )}
                 </div>
-
-                {conversation.status === "resolved" && (
-                    <Badge
-                        variant="secondary"
-                        className="mt-1 text-[10px] h-4 bg-slate-100 text-slate-500"
-                    >
-                        Resolved
-                    </Badge>
-                )}
-                {conversation.assignedTo && (
-                    <Badge
-                        variant="secondary"
-                        className="mt-1 text-[10px] h-4 bg-indigo-50 text-indigo-600 border border-indigo-100"
-                    >
-                        Assigned
-                    </Badge>
-                )}
             </div>
+
+            {/* Third row for extra info if assigned or resolved */}
+            {(conversation.status === "resolved" || conversation.assignedTo) && (
+                <div className="flex items-center gap-2 pt-1.5">
+                    {conversation.status === "resolved" && (
+                        <span className="text-[9px] font-medium text-slate-400 uppercase tracking-wider">Resolved</span>
+                    )}
+                    {conversation.assignedTo && (
+                        <span className="text-[9px] font-medium text-indigo-400 uppercase tracking-wider">Assigned</span>
+                    )}
+                </div>
+            )}
         </button>
     );
 }

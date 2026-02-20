@@ -46,6 +46,7 @@ export default function BroadcastPage() {
     const [variables, setVariables] = useState<Record<string, string>>({});
     const [csvData, setCsvData] = useState<string[]>([]);
     const [csvFileName, setCsvFileName] = useState("");
+    const [isSending, setIsSending] = useState(false);
 
     const approvedTemplates = templates?.filter((t) => t.status === "approved");
 
@@ -75,17 +76,40 @@ export default function BroadcastPage() {
         reader.readAsText(file);
     };
 
-    const handleSendCampaign = () => {
-        // In a real app, this would call a batch send endpoint
-        alert(
-            `Campaign sent!\n\nTemplate: ${selectedTemplate?.name}\nNumber: +${selectedNumber}\nRecipients: ${csvData.length}\nVariables: ${JSON.stringify(variables)}`
-        );
-        // Reset
-        setStep(1);
-        setSelectedTemplate(null);
-        setVariables({});
-        setCsvData([]);
-        setCsvFileName("");
+    const handleSendCampaign = async () => {
+        if (!selectedTemplate || csvData.length === 0) return;
+        setIsSending(true);
+
+        try {
+            const response = await fetch("/api/broadcast", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    templateId: selectedTemplate.name,
+                    variables: variables,
+                    recipients: csvData,
+                    integratedNumber: selectedNumber || activeNumber?.number,
+                }),
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Failed to send broadcast");
+            }
+
+            alert(`Campaign Sent!\n\nSuccessfully broadcasted to ${csvData.length} recipients.`);
+
+            // Reset
+            setStep(1);
+            setSelectedTemplate(null);
+            setVariables({});
+            setCsvData([]);
+            setCsvFileName("");
+        } catch (error: any) {
+            alert(`Broadcast Failed:\n\n${error.message}`);
+        } finally {
+            setIsSending(false);
+        }
     };
 
     return (
@@ -373,11 +397,17 @@ export default function BroadcastPage() {
                                     </Button>
                                     <Button
                                         onClick={handleSendCampaign}
-                                        disabled={csvData.length === 0}
+                                        disabled={csvData.length === 0 || isSending}
                                         className="bg-emerald-500 hover:bg-emerald-600 gap-2"
                                     >
-                                        <Send className="w-4 h-4" />
-                                        Send Campaign ({csvData.length} recipients)
+                                        {isSending ? (
+                                            "Sending..."
+                                        ) : (
+                                            <>
+                                                <Send className="w-4 h-4" />
+                                                Send Campaign ({csvData.length} recipients)
+                                            </>
+                                        )}
                                     </Button>
                                 </div>
                             </CardContent>

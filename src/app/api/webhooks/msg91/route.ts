@@ -45,6 +45,16 @@ export async function POST(request: NextRequest) {
         // Handle MSG91 pushing objects like { text: "actual message" } in the text field
         if (typeof messageBody === 'object' && messageBody !== null) {
             messageBody = messageBody.text || JSON.stringify(messageBody);
+        } else if (typeof messageBody === 'string') {
+            try {
+                // Sometimes MSG91 sends stringified JSON: '{"text":"Refunded mam"}'
+                const parsed = JSON.parse(messageBody);
+                if (parsed && typeof parsed === 'object' && parsed.text) {
+                    messageBody = parsed.text;
+                }
+            } catch (e) {
+                // Ignore parse errors, it's just a normal string
+            }
         }
 
         const contentType = body.type || "text";
@@ -59,6 +69,30 @@ export async function POST(request: NextRequest) {
             body.name ||
             body.contact_name ||
             "";
+
+        // Extract location data if present
+        let locationData = null;
+        if (contentType === "location" && body.location) {
+            locationData = {
+                longitude: body.location.longitude,
+                latitude: body.location.latitude,
+                name: body.location.name,
+                address: body.location.address
+            };
+            if (!messageBody || messageBody === "[media]") {
+                messageBody = `[Location: ${locationData.name || locationData.address || "Shared Location"}]`;
+            }
+        }
+
+        // Extract contact data if present
+        let contactData = null;
+        // MSG91 inbound webhook uses 'contacts' for the type, but let's be safe and check both.
+        if ((contentType === "contacts" || contentType === "contact") && body.contacts) {
+            contactData = body.contacts; // this is usually an array of contacts
+            if (!messageBody || messageBody === "[media]") {
+                messageBody = `[Contact: ${contactData?.[0]?.name?.formatted_name || "Shared Contact"}]`;
+            }
+        }
 
         if (!senderPhone) {
             console.log("[MSG91 Webhook] No sender phone found. Payload keys:", Object.keys(body));
@@ -155,16 +189,23 @@ export async function POST(request: NextRequest) {
         }
 
         // ─── 3. Insert Message ─────────────────────────────
-        const { error: msgError } = await supabaseAdmin.from("messages").insert({
+        const insertPayload: any = {
             conversation_id: conversation!.id,
             direction: "inbound",
-            content_type: contentType,
+            content_type: contentType === "contacts" ? "contact" : contentType, // Normalize 'contacts' to 'contact'
             body: messageBody,
             media_url: mediaUrl,
             file_name: fileName,
             status: "delivered",
-            external_id: externalId,
-        });
+        };
+
+        if (locationData) {
+            insertPayload.body = JSON.stringify({ text: messageBody, location: locationData });
+        } else if (contactData) {
+            insertPayload.body = JSON.stringify({ text: messageBody, contacts: contactData });
+        }
+
+        const { error: msgError } = await supabaseAdmin.from("messages").insert(insertPayload);
 
         if (msgError) {
             console.error("[MSG91 Webhook] Insert message error:", msgError);

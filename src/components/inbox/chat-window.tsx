@@ -12,6 +12,7 @@ import {
     XCircle,
     Bell,
     ChevronDown,
+    MessageSquareText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,8 +70,8 @@ function MessageBubble({ message }: { message: Message }) {
                     isNote
                         ? "bg-amber-50 border border-amber-200"
                         : isOutbound
-                            ? "bg-emerald-500 text-white rounded-br-md"
-                            : "bg-white border border-slate-100 rounded-bl-md"
+                            ? "bg-[#dcf8c6] text-slate-900 rounded-br-md"
+                            : "bg-white border border-slate-200 text-slate-900 rounded-bl-md"
                 )}
             >
                 {isNote && (
@@ -81,10 +82,8 @@ function MessageBubble({ message }: { message: Message }) {
 
                 {/* Content based on type */}
                 {message.contentType === "image" && message.mediaUrl && (
-                    <div className="mb-2 rounded-lg overflow-hidden">
-                        <div className="w-full h-40 bg-slate-100 flex items-center justify-center text-slate-400">
-                            <ImageIcon className="w-8 h-8" />
-                        </div>
+                    <div className="mb-2 rounded-lg overflow-hidden border border-slate-200/50">
+                        <img src={message.mediaUrl} alt="uploaded content" className="w-full h-auto max-h-60 object-contain" />
                     </div>
                 )}
 
@@ -92,7 +91,7 @@ function MessageBubble({ message }: { message: Message }) {
                     <div
                         className={cn(
                             "flex items-center gap-2 mb-2 p-2 rounded-lg",
-                            isOutbound ? "bg-emerald-600/30" : "bg-slate-50"
+                            isOutbound ? "bg-black/5" : "bg-slate-50"
                         )}
                     >
                         <FileText className="w-5 h-5 flex-shrink-0" />
@@ -102,14 +101,94 @@ function MessageBubble({ message }: { message: Message }) {
                     </div>
                 )}
 
+                {message.contentType === "interactive" && (
+                    <div
+                        className={cn(
+                            "flex items-center gap-2 mb-2 p-2 rounded-lg",
+                            isOutbound ? "bg-black/5 text-slate-800" : "bg-indigo-50 border border-indigo-100 text-indigo-700"
+                        )}
+                    >
+                        <MessageSquareText className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-sm font-medium">Interactive Message</span>
+                    </div>
+                )}
+
+                {message.contentType === "location" && (
+                    <div
+                        className={cn(
+                            "flex flex-col gap-1 mb-2 p-2 rounded-lg",
+                            isOutbound ? "bg-black/5 text-slate-800" : "bg-slate-50 text-slate-800"
+                        )}
+                    >
+                        <div className="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                            <span className="text-sm font-semibold">Location Shared</span>
+                        </div>
+                        {(() => {
+                            try {
+                                if (!isOutbound) {
+                                    const parsed = JSON.parse(message.body);
+                                    if (parsed.location?.latitude && parsed.location?.longitude) {
+                                        return (
+                                            <a
+                                                href={`https://www.google.com/maps/search/?api=1&query=${parsed.location.latitude},${parsed.location.longitude}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-blue-600 hover:underline mt-1 break-all"
+                                            >
+                                                View on Google Maps
+                                            </a>
+                                        );
+                                    }
+                                }
+                            } catch (e) {
+                                // Ignore JSON parse errors
+                            }
+                            return null;
+                        })()}
+                    </div>
+                )}
+
+                {message.contentType === "contact" && (
+                    <div
+                        className={cn(
+                            "flex flex-col gap-1 mb-2 p-2 rounded-lg",
+                            isOutbound ? "bg-black/5 text-slate-800" : "bg-slate-50 text-slate-800"
+                        )}
+                    >
+                        <div className="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                            <span className="text-sm font-semibold">Contact Card</span>
+                        </div>
+                        {(() => {
+                            try {
+                                if (!isOutbound) {
+                                    const parsed = JSON.parse(message.body);
+                                    if (parsed.contacts?.[0]?.name?.formatted_name) {
+                                        return (
+                                            <div className="text-xs mt-1 bg-white/50 px-2 py-1 rounded border border-black/5">
+                                                <p className="font-medium">{parsed.contacts[0].name.formatted_name}</p>
+                                                {parsed.contacts[0].phones?.[0]?.phone && (
+                                                    <p className="text-slate-600 mt-0.5">{parsed.contacts[0].phones[0].phone}</p>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+                                }
+                            } catch (e) {
+                                // Ignore
+                            }
+                            return null;
+                        })()}
+                    </div>
+                )}
+
                 <p
                     className={cn(
                         "text-sm leading-relaxed whitespace-pre-wrap",
                         isNote
                             ? "text-amber-900"
-                            : isOutbound
-                                ? "text-white"
-                                : "text-slate-800"
+                            : "text-slate-800"
                     )}
                 >
                     {message.body}
@@ -121,7 +200,7 @@ function MessageBubble({ message }: { message: Message }) {
                         isNote
                             ? "text-amber-500"
                             : isOutbound
-                                ? "text-emerald-100"
+                                ? "text-emerald-700/70"
                                 : "text-slate-400"
                     )}
                 >

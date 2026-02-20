@@ -20,7 +20,7 @@ export interface Contact {
 // ─── Message ───────────────────────────────────────────────
 export type MessageDirection = "inbound" | "outbound";
 export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
-export type MessageContentType = "text" | "image" | "document" | "template";
+export type MessageContentType = "text" | "image" | "document" | "template" | "interactive" | "location" | "contact";
 
 export interface Message {
   id: string;
@@ -149,7 +149,46 @@ export interface SendMediaPayload {
   mediaUrl?: string;
 }
 
-export type SendMessagePayload = SendTextPayload | SendTemplatePayload | SendMediaPayload;
+export interface SendInteractivePayload {
+  to: string;
+  contentType: "interactive";
+  interactive: Record<string, unknown>;
+  conversationId: string;
+  integratedNumber: string;
+}
+
+export interface SendLocationPayload {
+  to: string;
+  contentType: "location";
+  location: {
+    longitude: number;
+    latitude: number;
+    name: string;
+    address: string;
+  };
+  conversationId: string;
+  integratedNumber: string;
+}
+
+export interface SendContactPayload {
+  to: string;
+  contentType: "contact";
+  contacts: Array<{
+    name: {
+      first_name: string;
+      last_name?: string;
+      formatted_name: string;
+    };
+    phones: Array<{
+      phone: string;
+      type?: string;
+    }>;
+  }>;
+  conversationId: string;
+  integratedNumber: string;
+}
+
+export type SendMessagePayload = SendTextPayload | SendTemplatePayload | SendMediaPayload | SendInteractivePayload | SendLocationPayload | SendContactPayload;
 
 // ─── Socket Events ─────────────────────────────────────────
 export interface IncomingMessageEvent {
