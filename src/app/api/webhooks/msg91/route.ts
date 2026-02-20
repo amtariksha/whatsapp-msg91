@@ -35,12 +35,18 @@ export async function POST(request: NextRequest) {
             body.receiver ||
             body.integrated_number ||
             "";
-        const messageBody =
+        let messageBody =
             body.content ||
             body.message ||
             body.text ||
             body.body ||
             "";
+
+        // Handle MSG91 pushing objects like { text: "actual message" } in the text field
+        if (typeof messageBody === 'object' && messageBody !== null) {
+            messageBody = messageBody.text || JSON.stringify(messageBody);
+        }
+
         const contentType = body.type || "text";
         const mediaUrl = body.media_url || body.mediaUrl || null;
         const fileName = body.file_name || body.fileName || null;
