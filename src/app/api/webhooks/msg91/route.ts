@@ -124,27 +124,61 @@ export async function POST(request: NextRequest) {
             ['sent', 'delivered', 'read', 'failed'].includes(messageStatus.toLowerCase()) ||
             (!body.content && !body.type && body.status);
 
+        let isExternalOutbound = false;
+
         if (isDeliveryReport) {
             if (externalId) {
                 console.log(`[MSG91 Webhook] Processing delivery report for message ${externalId}: ${messageStatus}`);
 
-                // Update the message status in our database
-                const { error: updateError } = await supabaseAdmin
+                // Try to update the message status in our database
+                const { data: updatedMsg, error: updateError } = await supabaseAdmin
                     .from("messages")
                     .update({ status: messageStatus.toLowerCase() })
-                    // We don't have external_id in the DB right now, we need to match it somehow if we had it.
-                    // Actually, if we remove external_id from insert, how do we match delivery reports?
-                    // We can't match them accurately without storing the MSG91 requestId when we send the message.
-                    // For now, if we match by sender/receiver and time, it's too risky.
-                    // The best way is to add external_id back to the database schema.
-                    .eq("external_id", externalId);
+                    .eq("external_id", externalId)
+                    .select("id");
 
                 if (updateError) {
                     console.error("[MSG91 Webhook] Error updating message status:", updateError);
                 }
+
+                // If the message wasn't found in our DB, it means it was sent directly from the MSG91 app (external outbound)
+                if ((!updatedMsg || updatedMsg.length === 0) && messageBody) {
+                    console.log(`[MSG91 Webhook] Delivery report message not found in DB. Treating as external outbound message. body: ${messageBody}`);
+                    isExternalOutbound = true;
+                } else if (!updatedMsg || updatedMsg.length === 0) {
+                    // No body, just a status for an unknown message. Ignore.
+                    return NextResponse.json({ success: true, type: "delivery_report_unknown" });
+                } else {
+                    // Message was successfully updated
+                    return NextResponse.json({ success: true, type: "delivery_report" });
+                }
+            } else if (messageBody) {
+                // No externalId, but has body and is a sent event. Probably external outbound without ID.
+                isExternalOutbound = true;
+            } else {
+                return NextResponse.json({ success: true, type: "delivery_report_no_id" });
             }
-            // Acknowledge receipt of the webhook immediately
-            return NextResponse.json({ success: true, type: "delivery_report" });
+        }
+
+        // Determine actual customer and business numbers based on direction
+        let actualCustomerPhone = normalizedPhone;
+        let actualBusinessPhone = receiverNumber;
+        let messageDirection = "inbound";
+
+        if (isExternalOutbound) {
+            // For external outbound, the 'sender' of the webhook payload is actually the business number
+            // and the 'receiver' is the customer number.
+            actualCustomerPhone = receiverNumber.replace(/^\+/, "");
+            actualBusinessPhone = normalizedPhone;
+            messageDirection = "outbound";
+            console.log(`[MSG91 Webhook] External outbound message detected. Customer: ${actualCustomerPhone}, Business: ${actualBusinessPhone}`);
+
+            if (!actualCustomerPhone) {
+                return NextResponse.json(
+                    { error: "No customer phone found for external outbound message" },
+                    { status: 400 }
+                );
+            }
         }
 
 
@@ -152,16 +186,16 @@ export async function POST(request: NextRequest) {
         let { data: contact } = await supabaseAdmin
             .from("contacts")
             .select("id, name")
-            .eq("phone", normalizedPhone)
+            .eq("phone", actualCustomerPhone)
             .single();
 
         if (!contact) {
-            const contactDisplayName = senderName || normalizedPhone;
+            const contactDisplayName = isExternalOutbound ? actualCustomerPhone : (senderName || actualCustomerPhone);
             const { data: newContact, error: contactError } = await supabaseAdmin
                 .from("contacts")
                 .insert({
                     name: contactDisplayName,
-                    phone: normalizedPhone,
+                    phone: actualCustomerPhone,
                 })
                 .select("id, name")
                 .single();
@@ -179,7 +213,7 @@ export async function POST(request: NextRequest) {
             .from("conversations")
             .select("id")
             .eq("contact_id", contact!.id)
-            .eq("integrated_number", receiverNumber || "default")
+            .eq("integrated_number", actualBusinessPhone || "default")
             .single();
 
         if (!conversation) {
@@ -187,12 +221,12 @@ export async function POST(request: NextRequest) {
                 .from("conversations")
                 .insert({
                     contact_id: contact!.id,
-                    integrated_number: receiverNumber || "default",
+                    integrated_number: actualBusinessPhone || "default",
                     status: "open",
                     last_message: messageBody || "[media]",
                     last_message_time: new Date().toISOString(),
-                    last_incoming_timestamp: new Date().toISOString(),
-                    unread_count: 1,
+                    last_incoming_timestamp: isExternalOutbound ? undefined : new Date().toISOString(),
+                    unread_count: isExternalOutbound ? 0 : 1,
                 })
                 .select("id")
                 .single();
@@ -205,28 +239,34 @@ export async function POST(request: NextRequest) {
             console.log(`[MSG91 Webhook] Created conversation: ${conversation!.id}`);
         } else {
             // Update existing conversation
+            const updatePayload: any = {
+                status: "open",
+                last_message: messageBody || "[media]",
+                last_message_time: new Date().toISOString(),
+            };
+            if (!isExternalOutbound) {
+                updatePayload.last_incoming_timestamp = new Date().toISOString();
+            }
+
             await supabaseAdmin
                 .from("conversations")
-                .update({
-                    status: "open",
-                    last_message: messageBody || "[media]",
-                    last_message_time: new Date().toISOString(),
-                    last_incoming_timestamp: new Date().toISOString(),
-                })
+                .update(updatePayload)
                 .eq("id", conversation.id);
 
-            // Increment unread count
-            const { data: convData } = await supabaseAdmin
-                .from("conversations")
-                .select("unread_count")
-                .eq("id", conversation.id)
-                .single();
-
-            if (convData) {
-                await supabaseAdmin
+            // Increment unread count only if inbound
+            if (!isExternalOutbound) {
+                const { data: convData } = await supabaseAdmin
                     .from("conversations")
-                    .update({ unread_count: (convData.unread_count || 0) + 1 })
-                    .eq("id", conversation.id);
+                    .select("unread_count")
+                    .eq("id", conversation.id)
+                    .single();
+
+                if (convData) {
+                    await supabaseAdmin
+                        .from("conversations")
+                        .update({ unread_count: (convData.unread_count || 0) + 1 })
+                        .eq("id", conversation.id);
+                }
             }
         }
 
@@ -234,12 +274,12 @@ export async function POST(request: NextRequest) {
 
         const insertPayload: any = {
             conversation_id: conversation!.id,
-            direction: "inbound",
+            direction: messageDirection,
             content_type: contentType === "contacts" ? "contact" : contentType, // Normalize 'contacts' to 'contact'
             body: messageBody,
             media_url: mediaUrl,
             file_name: fileName,
-            status: "delivered",
+            status: isExternalOutbound ? "sent" : "delivered",
         };
 
         if (locationData) {
