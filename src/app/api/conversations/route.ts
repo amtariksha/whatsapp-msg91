@@ -59,7 +59,8 @@ export async function GET(request: NextRequest) {
     if (search) {
         // Search by contact name or phone — use contacts table filter
         query = query.or(
-            `contacts.name.ilike.%${search}%,contacts.phone.ilike.%${search}%`
+            `name.ilike.%${search}%,phone.ilike.%${search}%`,
+            { foreignTable: "contacts" }
         );
     }
 
@@ -70,14 +71,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json([], { status: 200 });
     }
 
-    // Filter out rows where the joined contact didn't match the search
+    // When filtering by a foreign table in Supabase, rows where the inner join condition fails
+    // return null for the joined object. We need to filter out rows where `contacts` is null.
     let results = (data || []).map(mapConversation);
     if (search) {
-        results = results.filter(
-            (c) =>
-                c.contact.name.toLowerCase().includes(search) ||
-                c.contact.phone.includes(search)
-        );
+        results = results.filter((c) => c.contact.id !== "");
     }
 
     return NextResponse.json(results);

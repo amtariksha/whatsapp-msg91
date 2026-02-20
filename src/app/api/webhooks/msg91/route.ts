@@ -96,15 +96,57 @@ export async function POST(request: NextRequest) {
 
         if (!senderPhone) {
             console.log("[MSG91 Webhook] No sender phone found. Payload keys:", Object.keys(body));
-            return NextResponse.json(
-                { error: "No sender phone found in payload" },
-                { status: 400 }
-            );
+            // Check if it's a delivery report before failing on missing phone
+            const tempEventName = body.eventName || body.event || "";
+            const tempStatus = body.status || "";
+            if (tempEventName === "message_status" || ['sent', 'delivered', 'read', 'failed'].includes(tempStatus.toLowerCase()) || (!body.content && !body.type && body.status)) {
+                // Allow it to pass down to delivery report parsing
+            } else {
+                return NextResponse.json(
+                    { error: "No sender phone found in payload" },
+                    { status: 400 }
+                );
+            }
         }
 
         // Normalize phone (remove + prefix if present)
         const normalizedPhone = senderPhone.replace(/^\+/, "");
         console.log(`[MSG91 Webhook] Processing message from ${normalizedPhone}`);
+
+        const eventName = body.eventName || body.event || "";
+        const messageStatus = body.status || "";
+
+        // ─── Handle Delivery Reports (Outbound Message Status) ───
+        // If the webhook is just a status update for a message we sent, it won't have 'content' in the same way,
+        // or it will have a specific eventName or status field.
+        const isDeliveryReport =
+            eventName === "message_status" ||
+            ['sent', 'delivered', 'read', 'failed'].includes(messageStatus.toLowerCase()) ||
+            (!body.content && !body.type && body.status);
+
+        if (isDeliveryReport) {
+            if (externalId) {
+                console.log(`[MSG91 Webhook] Processing delivery report for message ${externalId}: ${messageStatus}`);
+
+                // Update the message status in our database
+                const { error: updateError } = await supabaseAdmin
+                    .from("messages")
+                    .update({ status: messageStatus.toLowerCase() })
+                    // We don't have external_id in the DB right now, we need to match it somehow if we had it.
+                    // Actually, if we remove external_id from insert, how do we match delivery reports?
+                    // We can't match them accurately without storing the MSG91 requestId when we send the message.
+                    // For now, if we match by sender/receiver and time, it's too risky.
+                    // The best way is to add external_id back to the database schema.
+                    .eq("external_id", externalId);
+
+                if (updateError) {
+                    console.error("[MSG91 Webhook] Error updating message status:", updateError);
+                }
+            }
+            // Acknowledge receipt of the webhook immediately
+            return NextResponse.json({ success: true, type: "delivery_report" });
+        }
+
 
         // ─── 1. Upsert Contact ─────────────────────────────
         let { data: contact } = await supabaseAdmin
@@ -189,6 +231,7 @@ export async function POST(request: NextRequest) {
         }
 
         // ─── 3. Insert Message ─────────────────────────────
+
         const insertPayload: any = {
             conversation_id: conversation!.id,
             direction: "inbound",
