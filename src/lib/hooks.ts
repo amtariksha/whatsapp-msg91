@@ -157,9 +157,29 @@ export function useUpdateContactTags() {
     return useMutation({
         mutationFn: ({ id, tags }: { id: string; tags: string[] }) =>
             api.updateContactTags(id, tags),
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: ["contacts"] });
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
             queryClient.invalidateQueries({ queryKey: ["conversation"] });
+            queryClient.invalidateQueries({ queryKey: ["contact", data.id] });
+        },
+    });
+}
+
+export function useUpdateContact() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({
+            id,
+            payload,
+        }: {
+            id: string;
+            payload: { name?: string; email?: string; customFields?: Record<string, string> };
+        }) => api.updateContact(id, payload),
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            queryClient.invalidateQueries({ queryKey: ["conversation"] });
+            queryClient.invalidateQueries({ queryKey: ["contact", data.id] });
         },
     });
 }

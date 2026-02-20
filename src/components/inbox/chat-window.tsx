@@ -28,6 +28,7 @@ import { useAuth } from "@/components/auth-provider";
 import { MessageComposer } from "./message-composer";
 import { ReminderDialog } from "./reminder-dialog";
 import type { Message, MessageStatus } from "@/lib/types";
+import { SessionTimer } from "./session-timer";
 
 function StatusIcon({ status }: { status: MessageStatus }) {
     switch (status) {
@@ -235,13 +236,23 @@ export function ChatWindow() {
                             {initials}
                         </AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-start bg-transparent">
                         <span className="text-sm font-semibold text-slate-900">
                             {conversation.contact.name}
                         </span>
-                        <span className="text-xs text-slate-500">
-                            +{conversation.contact.phone}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-slate-500">
+                                +{conversation.contact.phone}
+                            </span>
+                            {/* Session Timer */}
+                            {conversation.lastIncomingTimestamp && (
+                                <SessionTimer
+                                    lastIncomingTimestamp={conversation.lastIncomingTimestamp}
+                                    className="w-3.5 h-3.5"
+                                    showLabel={false}
+                                />
+                            )}
+                        </div>
                     </div>
                 </button>
 

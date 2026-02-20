@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Phone, Tag, Plus, X, User } from "lucide-react";
+import { Mail, Phone, Tag, Plus, X, User, Pencil, Check, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useConversation, useUpdateContactTags } from "@/lib/hooks";
+import { useConversation, useUpdateContactTags, useUpdateContact } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 
 export function ContactDetails() {
@@ -19,7 +19,17 @@ export function ContactDetails() {
     } = useAppStore();
     const { data: conversation } = useConversation(activeConversationId);
     const updateTags = useUpdateContactTags();
+    const updateContact = useUpdateContact();
+
+    // Local state
     const [newTag, setNewTag] = useState("");
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedName, setEditedName] = useState("");
+
+    // Custom fields state
+    const [newFieldKey, setNewFieldKey] = useState("");
+    const [newFieldValue, setNewFieldValue] = useState("");
+    const [showAddCustomField, setShowAddCustomField] = useState(false);
 
     if (!contactPanelOpen || !conversation) return null;
 
@@ -31,6 +41,7 @@ export function ContactDetails() {
         .toUpperCase()
         .slice(0, 2);
 
+    // ─── Tags Handlers ─────────────────────────────────────
     const handleAddTag = () => {
         if (!newTag.trim()) return;
         const updatedTags = [...contact.tags, newTag.trim()];
@@ -43,10 +54,54 @@ export function ContactDetails() {
         updateTags.mutate({ id: contact.id, tags: updatedTags });
     };
 
+    // ─── Name Handlers ─────────────────────────────────────
+    const startEditingName = () => {
+        setEditedName(contact.name);
+        setIsEditingName(true);
+    };
+
+    const saveName = () => {
+        if (!editedName.trim() || editedName === contact.name) {
+            setIsEditingName(false);
+            return;
+        }
+        updateContact.mutate({ id: contact.id, payload: { name: editedName } });
+        setIsEditingName(false);
+    };
+
+    // ─── Custom Fields Handlers ────────────────────────────
+    const handleAddCustomField = () => {
+        if (!newFieldKey.trim() || !newFieldValue.trim()) return;
+
+        const updatedFields = {
+            ...(contact.customFields || {}),
+            [newFieldKey.trim()]: newFieldValue.trim()
+        };
+
+        updateContact.mutate({
+            id: contact.id,
+            payload: { customFields: updatedFields }
+        });
+
+        setNewFieldKey("");
+        setNewFieldValue("");
+        setShowAddCustomField(false);
+    };
+
+    const handleDeleteCustomField = (key: string) => {
+        const updatedFields = { ...(contact.customFields || {}) };
+        delete updatedFields[key];
+
+        updateContact.mutate({
+            id: contact.id,
+            payload: { customFields: updatedFields }
+        });
+    };
+
     return (
-        <div className="w-[300px] min-w-[300px] h-full border-l border-slate-200 bg-white flex flex-col">
+        <div className="w-[300px] min-w-[300px] h-full border-l border-slate-200 bg-white flex flex-col overflow-y-auto">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 h-16 border-b border-slate-200">
+            <div className="flex items-center justify-between px-4 h-16 border-b border-slate-200 flex-shrink-0">
                 <h3 className="text-sm font-semibold text-slate-900">
                     Contact Details
                 </h3>
@@ -67,9 +122,39 @@ export function ContactDetails() {
                         {initials}
                     </AvatarFallback>
                 </Avatar>
-                <h4 className="text-base font-semibold text-slate-900">
-                    {contact.name}
-                </h4>
+
+                {isEditingName ? (
+                    <div className="flex items-center gap-2 w-full">
+                        <Input
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && saveName()}
+                            className="text-center h-8 font-semibold"
+                            autoFocus
+                        />
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600" onClick={saveName}>
+                            <Check className="w-4 h-4" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => setIsEditingName(false)}>
+                            <X className="w-4 h-4" />
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 group relative">
+                        <h4 className="text-base font-semibold text-slate-900 text-center">
+                            {contact.name}
+                        </h4>
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity absolute -right-8"
+                            onClick={startEditingName}
+                        >
+                            <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                    </div>
+                )}
+
                 <p className="text-xs text-slate-500 mt-0.5">
                     Customer since{" "}
                     {new Date(contact.createdAt).toLocaleDateString("en-IN", {
@@ -122,6 +207,85 @@ export function ContactDetails() {
                         </p>
                     </div>
                 </div>
+            </div>
+
+            <Separator />
+
+            {/* Custom Fields */}
+            <div className="px-4 py-4 space-y-3">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
+                        Additional Details
+                    </h3>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs text-slate-500 hover:text-emerald-600 px-2"
+                        onClick={() => setShowAddCustomField(true)}
+                    >
+                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                    </Button>
+                </div>
+
+                <div className="space-y-2">
+                    {contact.customFields && Object.entries(contact.customFields).map(([key, value]) => (
+                        <div key={key} className="group flex items-start justify-between text-sm border border-slate-100 rounded-md p-2 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[10px] text-slate-500 font-medium mb-0.5">{key}</p>
+                                <p className="text-slate-800 break-words">{value}</p>
+                            </div>
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleDeleteCustomField(key)}
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                        </div>
+                    ))}
+
+                    {(!contact.customFields || Object.keys(contact.customFields).length === 0) && !showAddCustomField && (
+                        <p className="text-xs text-slate-400 italic">No custom fields</p>
+                    )}
+                </div>
+
+                {/* Add Custom Field Form */}
+                {showAddCustomField && (
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-2 animate-in slide-in-from-top-2 fade-in duration-200">
+                        <Input
+                            placeholder="Field Name"
+                            value={newFieldKey}
+                            onChange={(e) => setNewFieldKey(e.target.value)}
+                            className="h-7 text-xs bg-white"
+                            autoFocus
+                        />
+                        <Input
+                            placeholder="Value"
+                            value={newFieldValue}
+                            onChange={(e) => setNewFieldValue(e.target.value)}
+                            className="h-7 text-xs bg-white"
+                        />
+                        <div className="flex items-center gap-2 pt-1">
+                            <Button
+                                size="sm"
+                                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 w-full"
+                                onClick={handleAddCustomField}
+                                disabled={!newFieldKey.trim() || !newFieldValue.trim()}
+                            >
+                                Add Field
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-slate-500 w-full"
+                                onClick={() => setShowAddCustomField(false)}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <Separator />

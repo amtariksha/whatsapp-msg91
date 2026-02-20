@@ -8,6 +8,7 @@ function mapContact(row: Record<string, unknown>) {
         phone: row.phone,
         email: row.email || undefined,
         tags: row.tags || [],
+        customFields: row.custom_fields || {},
         createdAt: row.created_at,
     };
 }
@@ -44,6 +45,7 @@ export async function PATCH(
     if (body.tags) updateData.tags = body.tags;
     if (body.name) updateData.name = body.name;
     if (body.email !== undefined) updateData.email = body.email;
+    if (body.customFields !== undefined) updateData.custom_fields = body.customFields;
 
     const { data, error } = await supabaseAdmin
         .from("contacts")

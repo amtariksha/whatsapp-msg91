@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import {
     Send,
     Paperclip,
@@ -8,6 +8,8 @@ import {
     AlertTriangle,
     FileText,
     Zap,
+    X,
+    Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +35,8 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     const [isInternalNote, setIsInternalNote] = useState(false);
     const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
     const [showQuickReplies, setShowQuickReplies] = useState(false);
+    const [attachedFile, setAttachedFile] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const sendMessage = useSendMessage();
     const { data: quickReplies } = useQuickReplies();
     const activeNumber = useAppStore((s) => s.activeNumber);
@@ -57,24 +61,50 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
         setShowQuickReplies(false);
     };
 
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setAttachedFile(file);
+        }
+        // Reset input so the same file can be re-selected
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
     const handleSend = (e: FormEvent) => {
         e.preventDefault();
-        if (!text.trim() || sessionExpired) return;
+        const hasText = text.trim().length > 0;
+        const hasFile = attachedFile !== null;
+
+        if ((!hasText && !hasFile) || (sessionExpired && !isInternalNote)) return;
 
         if (isInternalNote) {
-            // Internal notes are saved locally only (in a real app, saved to DB)
             setText("");
             return;
         }
 
-        sendMessage.mutate({
-            to: conversation.contact.phone,
-            contentType: "text",
-            text: text.trim(),
-            conversationId: conversation.id,
-            integratedNumber: activeNumber?.number || conversation.integratedNumber,
-        });
-        setText("");
+        if (hasFile) {
+            const isImage = attachedFile!.type.startsWith("image/");
+            const contentType = isImage ? "image" : "document";
+
+            sendMessage.mutate({
+                to: conversation.contact.phone,
+                contentType,
+                text: attachedFile!.name,
+                conversationId: conversation.id,
+                integratedNumber: activeNumber?.number || conversation.integratedNumber,
+            } as Parameters<typeof sendMessage.mutate>[0]);
+            setAttachedFile(null);
+            setText("");
+        } else {
+            sendMessage.mutate({
+                to: conversation.contact.phone,
+                contentType: "text",
+                text: text.trim(),
+                conversationId: conversation.id,
+                integratedNumber: activeNumber?.number || conversation.integratedNumber,
+            });
+            setText("");
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -151,6 +181,29 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                     )}
                 </div>
 
+                {/* Attached File Preview */}
+                {attachedFile && (
+                    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                        {attachedFile.type.startsWith("image/") ? (
+                            <ImageIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                        ) : (
+                            <FileText className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                        )}
+                        <span className="text-xs text-slate-700 truncate flex-1">
+                            {attachedFile.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                            {(attachedFile.size / 1024).toFixed(0)} KB
+                        </span>
+                        <button
+                            onClick={() => setAttachedFile(null)}
+                            className="text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                )}
+
                 {/* Composer */}
                 <form onSubmit={handleSend} className="flex items-end gap-2">
                     <div className="flex-1 relative">
@@ -163,7 +216,9 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                                     ? "Session expired — use a template or write a note"
                                     : isInternalNote
                                         ? "Write an internal note..."
-                                        : "Type a message..."
+                                        : attachedFile
+                                            ? "Add a caption (optional)..."
+                                            : "Type a message..."
                             }
                             disabled={sessionExpired && !isInternalNote}
                             className={cn(
@@ -178,6 +233,15 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                     </div>
 
                     <div className="flex items-center gap-1.5 pb-0.5">
+                        {/* Hidden file input */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            className="hidden"
+                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                            onChange={handleFileSelect}
+                        />
+
                         {!sessionExpired && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -185,6 +249,7 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
+                                        onClick={() => fileInputRef.current?.click()}
                                         className="h-9 w-9 text-slate-400 hover:text-slate-600"
                                     >
                                         <Paperclip className="w-4.5 h-4.5" />
@@ -255,7 +320,7 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                             type="submit"
                             size="icon"
                             disabled={
-                                !text.trim() || (sessionExpired && !isInternalNote) || sendMessage.isPending
+                                (!text.trim() && !attachedFile) || (sessionExpired && !isInternalNote) || sendMessage.isPending
                             }
                             className={cn(
                                 "h-9 w-9 rounded-lg",

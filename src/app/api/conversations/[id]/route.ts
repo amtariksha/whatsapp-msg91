@@ -23,6 +23,7 @@ function mapContact(row: Record<string, unknown>) {
         phone: row.phone,
         email: row.email || undefined,
         tags: row.tags || [],
+        customFields: row.custom_fields || {},
         createdAt: row.created_at,
     };
 }

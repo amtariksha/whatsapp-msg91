@@ -109,6 +109,19 @@ export async function updateContactTags(
     return res.json();
 }
 
+export async function updateContact(
+    id: string,
+    payload: { name?: string; email?: string; customFields?: Record<string, string> }
+): Promise<Contact> {
+    const res = await fetch(`${BASE_URL}/api/contacts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to update contact");
+    return res.json();
+}
+
 // ─── Templates ─────────────────────────────────────────────
 export async function getTemplates(): Promise<Template[]> {
     const res = await fetch(`${BASE_URL}/api/templates`);

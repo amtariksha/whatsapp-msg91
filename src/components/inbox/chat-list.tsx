@@ -5,12 +5,12 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn, formatChatTime, truncate } from "@/lib/utils";
 import { useConversations } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 import type { Conversation } from "@/lib/types";
+import { SessionTimer } from "./session-timer";
 
 export function ChatList() {
     const [status, setStatus] = useState("all");
@@ -61,7 +61,7 @@ export function ChatList() {
             </div>
 
             {/* Conversation List */}
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-y-auto">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-12">
                         <div className="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full" />
@@ -83,7 +83,7 @@ export function ChatList() {
                         ))}
                     </div>
                 )}
-            </ScrollArea>
+            </div>
         </div>
     );
 }
@@ -143,9 +143,18 @@ function ConversationItem({
                     >
                         {conversation.contact.name}
                     </span>
-                    <span className="text-xs text-slate-400 flex-shrink-0 ml-2">
-                        {formatChatTime(conversation.lastMessageTime)}
-                    </span>
+                    <div className="flex items-center gap-1.5 ml-2">
+                        {conversation.lastIncomingTimestamp && (
+                            <SessionTimer
+                                lastIncomingTimestamp={conversation.lastIncomingTimestamp}
+                                className="w-2.5 h-2.5"
+                                showLabel={false}
+                            />
+                        )}
+                        <span className="text-xs text-slate-400 flex-shrink-0">
+                            {formatChatTime(conversation.lastMessageTime)}
+                        </span>
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between">

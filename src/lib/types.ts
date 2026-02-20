@@ -13,6 +13,7 @@ export interface Contact {
   phone: string;
   email?: string;
   tags: string[];
+  customFields?: Record<string, string>;
   createdAt: string;
 }
 
@@ -138,7 +139,17 @@ export interface SendTemplatePayload {
   integratedNumber: string;
 }
 
-export type SendMessagePayload = SendTextPayload | SendTemplatePayload;
+export interface SendMediaPayload {
+  to: string;
+  contentType: "image" | "document";
+  text: string;
+  conversationId: string;
+  integratedNumber: string;
+  fileName?: string;
+  mediaUrl?: string;
+}
+
+export type SendMessagePayload = SendTextPayload | SendTemplatePayload | SendMediaPayload;
 
 // ─── Socket Events ─────────────────────────────────────────
 export interface IncomingMessageEvent {

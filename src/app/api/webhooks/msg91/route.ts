@@ -46,6 +46,14 @@ export async function POST(request: NextRequest) {
         const fileName = body.file_name || body.fileName || null;
         const externalId = body.uuid || body.requestId || null;
 
+        // Extract sender name from MSG91 payload if available
+        const senderName =
+            body.profile?.name ||
+            body.senderName ||
+            body.name ||
+            body.contact_name ||
+            "";
+
         if (!senderPhone) {
             console.log("[MSG91 Webhook] No sender phone found. Payload keys:", Object.keys(body));
             return NextResponse.json(
@@ -66,10 +74,11 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (!contact) {
+            const contactDisplayName = senderName || normalizedPhone;
             const { data: newContact, error: contactError } = await supabaseAdmin
                 .from("contacts")
                 .insert({
-                    name: normalizedPhone, // use phone as name initially
+                    name: contactDisplayName,
                     phone: normalizedPhone,
                 })
                 .select("id, name")
