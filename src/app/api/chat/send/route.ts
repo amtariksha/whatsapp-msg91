@@ -4,15 +4,6 @@ import { supabaseAdmin } from "@/lib/supabase";
 // ─── POST /api/chat/send ──────────────────────────────────
 export async function POST(request: NextRequest) {
     const body = await request.json();
-    const authKey = process.env.MSG91_AUTH_KEY;
-
-    if (!authKey) {
-        return NextResponse.json(
-            { error: "MSG91_AUTH_KEY not configured" },
-            { status: 500 }
-        );
-    }
-
     const {
         to,
         contentType,
@@ -23,6 +14,16 @@ export async function POST(request: NextRequest) {
     // Clean phone number (remove + prefix if present)
     const phone = to.replace(/^\+/, "");
     const sendFromNumber = integratedNumber || process.env.MSG91_INTEGRATED_NUMBER || "919999999999";
+
+    // ─── Fetch number config from DB ───────────────────────
+    const { data: numConfig } = await supabaseAdmin
+        .from("integrated_numbers")
+        .select("*")
+        .eq("number", sendFromNumber)
+        .single();
+
+    // Default to msg91 if not found in db
+    const provider = numConfig?.provider || "msg91";
 
     let msg91Payload: Record<string, unknown>;
     let messageBody = "";
@@ -115,35 +116,128 @@ export async function POST(request: NextRequest) {
         messageBody = text;
     }
 
-    // ─── Send via MSG91 ──────────────────────────────────────
-    let msg91Status = "sent";
-    let msg91Response: unknown = null;
-    try {
-        const response = await fetch(
-            "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/",
-            {
-                method: "POST",
-                headers: {
-                    authkey: authKey,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(msg91Payload),
-            }
-        );
+    let finalStatus = "sent";
+    let finalResponse: unknown = null;
 
-        const responseText = await response.text();
-        try { msg91Response = JSON.parse(responseText); } catch { msg91Response = responseText; }
-
-        if (!response.ok) {
-            console.error("[Chat Send] MSG91 error:", response.status, responseText);
-            console.error("[Chat Send] Payload was:", JSON.stringify(msg91Payload, null, 2));
-            msg91Status = "failed";
-        } else {
-            console.log("[Chat Send] MSG91 success:", responseText);
+    if (provider === "meta") {
+        // ─── Send via Meta Cloud API ──────────────────────────────
+        const metaPhoneNumberId = numConfig?.meta_phone_number_id;
+        const metaAccessToken = numConfig?.meta_access_token;
+        if (!metaPhoneNumberId || !metaAccessToken) {
+            return NextResponse.json({ error: "Meta credentials not configured for this number" }, { status: 500 });
         }
-    } catch (err) {
-        console.error("[Chat Send] MSG91 network error:", err);
-        msg91Status = "failed";
+
+        let metaPayload: Record<string, unknown> = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: phone,
+        };
+
+        if (contentType === "template") {
+            const { templateName, templateLanguage, components } = body;
+            const mappedComponents = Object.entries(components || {}).map(([key, value]: [string, any]) => ({
+                type: value.type,
+                parameters: [{
+                    type: "text",
+                    text: value.value
+                }]
+            }));
+
+            metaPayload = {
+                ...metaPayload,
+                type: "template",
+                template: {
+                    name: templateName,
+                    language: { code: templateLanguage || "en" },
+                    components: mappedComponents.length > 0 ? [{ type: "body", parameters: mappedComponents.map(c => c.parameters[0]) }] : [],
+                },
+            };
+        } else if (contentType === "document" || contentType === "image") {
+            const { mediaUrl, fileName } = body;
+            const mediaType = contentType === "image" ? "image" : "document";
+            metaPayload = {
+                ...metaPayload,
+                type: mediaType,
+                [mediaType]: {
+                    link: mediaUrl,
+                    ...(fileName && mediaType === "document" ? { filename: fileName } : {}),
+                },
+            };
+        } else {
+            // Default text
+            const { text } = body;
+            metaPayload = {
+                ...metaPayload,
+                type: "text",
+                text: { preview_url: false, body: text },
+            };
+        }
+
+        try {
+            const response = await fetch(
+                `https://graph.facebook.com/v19.0/${metaPhoneNumberId}/messages`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${metaAccessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(metaPayload),
+                }
+            );
+
+            const responseText = await response.text();
+            try { finalResponse = JSON.parse(responseText); } catch { finalResponse = responseText; }
+
+            if (!response.ok) {
+                console.error("[Chat Send] Meta error:", response.status, responseText);
+                finalStatus = "failed";
+            } else {
+                console.log("[Chat Send] Meta success:", responseText);
+                const data = finalResponse as { messages?: { id: string }[] };
+                if (data?.messages?.[0]?.id) {
+                    // Save the Meta message ID. Wait, I'll store it in msg91_message_id for now 
+                    // or maybe create a meta_message_id column? Let's use request_id for it
+                }
+            }
+        } catch (err) {
+            console.error("[Chat Send] Meta network error:", err);
+            finalStatus = "failed";
+        }
+    } else {
+        // ─── Send via MSG91 ──────────────────────────────────────
+        const authKey = process.env.MSG91_AUTH_KEY;
+        if (!authKey) {
+            return NextResponse.json({ error: "MSG91_AUTH_KEY not configured" }, { status: 500 });
+        }
+
+        try {
+            const response = await fetch(
+                "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/",
+                {
+                    method: "POST",
+                    headers: {
+                        authkey: authKey,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(msg91Payload),
+                }
+            );
+
+            const responseText = await response.text();
+            try { finalResponse = JSON.parse(responseText); } catch { finalResponse = responseText; }
+
+            if (!response.ok) {
+                console.error("[Chat Send] MSG91 error:", response.status, responseText);
+                console.error("[Chat Send] Payload was:", JSON.stringify(msg91Payload, null, 2));
+                finalStatus = "failed";
+            } else {
+                console.log("[Chat Send] MSG91 success:", responseText);
+            }
+        } catch (err) {
+            console.error("[Chat Send] MSG91 network error:", err);
+            finalStatus = "failed";
+        }
     }
 
     // ─── Persist message in Supabase ─────────────────────────
@@ -156,9 +250,12 @@ export async function POST(request: NextRequest) {
             body: messageBody,
             media_url: body.mediaUrl || null,
             file_name: body.fileName || null,
-            status: msg91Status,
+            status: finalStatus,
             is_internal_note: false,
             integrated_number: sendFromNumber,
+            request_id: provider === "meta" && (finalResponse as any)?.messages?.[0]?.id
+                ? (finalResponse as any).messages[0].id
+                : undefined,
         })
         .select()
         .single();
@@ -166,7 +263,7 @@ export async function POST(request: NextRequest) {
     if (msgError) {
         console.error("[Chat Send] Message persist error:", msgError);
         return NextResponse.json(
-            { error: "Failed to save message", msg91Status },
+            { error: "Failed to save message", msg91Status: finalStatus },
             { status: 500 }
         );
     }
@@ -194,6 +291,6 @@ export async function POST(request: NextRequest) {
         status: message.status || "sent",
         isInternalNote: message.is_internal_note || false,
         timestamp: message.created_at,
-        msg91Response,
+        providerResponse: finalResponse,
     });
 }

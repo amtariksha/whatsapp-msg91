@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useConversation, useUpdateContactTags, useUpdateContact } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 
-export function ContactDetails() {
+export function ContactDetails({ className }: { className?: string }) {
     const {
         activeConversationId,
         contactPanelOpen,
@@ -99,7 +99,7 @@ export function ContactDetails() {
     };
 
     return (
-        <div className="w-[300px] min-w-[300px] h-full border-l border-slate-200 bg-white flex flex-col overflow-y-auto">
+        <div className={cn("w-[300px] min-w-[300px] h-full border-l border-slate-200 bg-white flex flex-col overflow-y-auto", className)}>
             {/* Header */}
             <div className="flex items-center justify-between px-4 h-16 border-b border-slate-200 flex-shrink-0">
                 <h3 className="text-sm font-semibold text-slate-900">

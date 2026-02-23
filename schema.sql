@@ -132,6 +132,10 @@ CREATE TABLE IF NOT EXISTS integrated_numbers (
     number     TEXT UNIQUE NOT NULL,
     label      TEXT,
     active     BOOLEAN DEFAULT true,
+    provider   TEXT DEFAULT 'msg91' CHECK (provider IN ('msg91', 'meta')),
+    meta_waba_id TEXT,
+    meta_phone_number_id TEXT,
+    meta_access_token TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 -- ─── Migrations (add columns to existing tables) ─────────────

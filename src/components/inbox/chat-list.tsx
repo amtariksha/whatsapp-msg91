@@ -12,14 +12,14 @@ import { useAppStore } from "@/lib/store";
 import type { Conversation } from "@/lib/types";
 import { SessionTimer } from "./session-timer";
 
-export function ChatList() {
+export function ChatList({ className }: { className?: string }) {
     const [status, setStatus] = useState("all");
     const [search, setSearch] = useState("");
     const { activeConversationId, setActiveConversation } = useAppStore();
     const { data: conversations, isLoading } = useConversations(status, search);
 
     return (
-        <div className="flex flex-col h-full w-[340px] min-w-[340px] border-r border-slate-200 bg-white">
+        <div className={cn("flex-col h-full border-r border-slate-200 bg-white", className)}>
             {/* Header */}
             <div className="px-4 pt-4 pb-3 border-b border-slate-100">
                 <h2 className="text-lg font-semibold text-slate-900 mb-3">Messages</h2>

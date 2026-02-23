@@ -335,3 +335,15 @@ export function useUpdatePayment() {
         },
     });
 }
+
+export function useSyncPayment() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (id: string) => api.syncPayment(id),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        },
+    });
+}

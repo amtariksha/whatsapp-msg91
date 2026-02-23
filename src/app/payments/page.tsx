@@ -12,13 +12,14 @@ import {
     Check,
     MoreHorizontal,
     ExternalLink,
+    RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { usePayments, useUpdatePayment } from "@/lib/hooks";
+import { usePayments, useUpdatePayment, useSyncPayment } from "@/lib/hooks";
 import { PaymentLinkDialog } from "@/components/payments/payment-link-dialog";
 import { formatDistanceToNow } from "date-fns";
 import type { Payment } from "@/lib/types";
@@ -77,6 +78,7 @@ export default function PaymentsPage() {
 
     const { data, isLoading } = usePayments({ status: statusFilter });
     const { mutate: updatePayment, isPending: isUpdating } = useUpdatePayment();
+    const { mutate: syncPayment, isPending: isSyncing } = useSyncPayment();
 
     const payments = data?.payments || [];
     const summary = data?.summary || {
@@ -341,6 +343,20 @@ export default function PaymentsPage() {
                                                             <CheckCircle2 className="w-3.5 h-3.5" />
                                                         </button>
                                                     )}
+                                                    {/* Sync */}
+                                                    {payment.razorpayLinkId && payment.paymentStatus !== "paid" && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                syncPayment(payment.id);
+                                                            }}
+                                                            disabled={isSyncing}
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                                                            title="Sync status with Razorpay"
+                                                        >
+                                                            <RefreshCw className={cn("w-3.5 h-3.5", isSyncing && "animate-spin")} />
+                                                        </button>
+                                                    )}
                                                     {/* Expand */}
                                                     <button
                                                         onClick={(e) => {
@@ -431,6 +447,17 @@ export default function PaymentsPage() {
                                                                 >
                                                                     <CheckCircle2 className="w-3 h-3" />
                                                                     Mark as Paid
+                                                                </button>
+                                                            )}
+                                                            {/* Sync */}
+                                                            {payment.razorpayLinkId && payment.paymentStatus !== "paid" && (
+                                                                <button
+                                                                    onClick={() => syncPayment(payment.id)}
+                                                                    disabled={isSyncing}
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                                                >
+                                                                    <RefreshCw className={cn("w-3 h-3", isSyncing && "animate-spin")} />
+                                                                    Sync Status
                                                                 </button>
                                                             )}
                                                         </div>

@@ -316,3 +316,11 @@ export async function updatePayment(
     if (!res.ok) throw new Error("Failed to update payment");
     return res.json();
 }
+
+export async function syncPayment(id: string): Promise<{ success: boolean; status: string }> {
+    const res = await fetch(`${BASE_URL}/api/payments/${id}/sync`, {
+        method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to sync payment");
+    return res.json();
+}

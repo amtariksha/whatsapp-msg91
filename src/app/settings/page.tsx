@@ -39,7 +39,7 @@ export default function SettingsPage() {
     const [error, setError] = useState("");
 
     // ─── Settings tab ───────────────────────────────────────
-    const [activeTab, setActiveTab] = useState<"users" | "quick-replies">("users");
+    const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers">("users");
 
     // ─── Reset password dialog ─────────────────────────────
     const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -183,6 +183,16 @@ export default function SettingsPage() {
                 >
                     <Zap className="w-4 h-4 inline mr-2" />
                     Quick Replies
+                </button>
+                <button
+                    onClick={() => setActiveTab("numbers")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "numbers"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                        }`}
+                >
+                    <User className="w-4 h-4 inline mr-2" />
+                    WhatsApp Numbers
                 </button>
             </div>
 
@@ -469,6 +479,10 @@ export default function SettingsPage() {
             {activeTab === "quick-replies" && (
                 <QuickRepliesTab />
             )}
+
+            {activeTab === "numbers" && (
+                <NumbersTab />
+            )}
         </div>
     );
 }
@@ -653,6 +667,277 @@ function QuickRepliesTab() {
                             </div>
                         ))}
                     </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ─── Numbers Tab ───────────────────────────────────────────
+function NumbersTab() {
+    const [numbers, setNumbers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
+    const [editId, setEditId] = useState<string | null>(null);
+
+    // Form fields
+    const [number, setNumber] = useState("");
+    const [label, setLabel] = useState("");
+    const [provider, setProvider] = useState<"msg91" | "meta">("msg91");
+    const [metaWabaId, setMetaWabaId] = useState("");
+    const [metaPhoneNumberId, setMetaPhoneNumberId] = useState("");
+    const [metaAccessToken, setMetaAccessToken] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const fetchNumbers = async () => {
+        try {
+            const res = await fetch("/api/numbers");
+            if (res.ok) setNumbers(await res.json());
+        } catch (e) {
+            console.error("Failed to fetch numbers:", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchNumbers(); }, []);
+
+    const resetForm = () => {
+        setShowForm(false);
+        setEditId(null);
+        setNumber("");
+        setLabel("");
+        setProvider("msg91");
+        setMetaWabaId("");
+        setMetaPhoneNumberId("");
+        setMetaAccessToken("");
+    };
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            const payload = {
+                id: editId || undefined,
+                number,
+                label,
+                provider,
+                metaWabaId: provider === "meta" ? metaWabaId : undefined,
+                metaPhoneNumberId: provider === "meta" ? metaPhoneNumberId : undefined,
+                metaAccessToken: provider === "meta" ? metaAccessToken : undefined,
+            };
+
+            const method = editId ? "PATCH" : "POST";
+            await fetch("/api/numbers", {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            resetForm();
+            fetchNumbers();
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleEdit = (num: any) => {
+        setEditId(num.id);
+        setNumber(num.number || "");
+        setLabel(num.label || "");
+        setProvider(num.provider || "msg91");
+        setMetaWabaId(num.metaWabaId || "");
+        setMetaPhoneNumberId(num.metaPhoneNumberId || "");
+        setMetaAccessToken(num.metaAccessToken || "");
+        setShowForm(true);
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm("Remove this number? This might break sending messages from this number until replaced.")) return;
+        await fetch(`/api/numbers?id=${id}`, { method: "DELETE" });
+        fetchNumbers();
+    };
+
+    return (
+        <div>
+            <div className="flex justify-between mb-4 items-end">
+                <p className="text-sm text-slate-500">Configure your integrated WhatsApp numbers and providers.</p>
+                <button
+                    onClick={() => { resetForm(); setShowForm(true); }}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors shadow-sm"
+                >
+                    <Plus className="w-4 h-4" />
+                    Add Number
+                </button>
+            </div>
+
+            {showForm && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+                        {editId ? "Edit Number Configuration" : "Add Number Configuration"}
+                    </h3>
+                    <form onSubmit={handleSave} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
+                                <input
+                                    type="text"
+                                    value={number}
+                                    onChange={(e) => setNumber(e.target.value)}
+                                    placeholder="e.g. 919876543210 (include country code)"
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                                    required
+                                    disabled={!!editId} // Don't allow changing the number value deeply after creation easily
+                                />
+                                {editId && <p className="text-[10px] text-slate-400 mt-1">Number cannot be edited after creation. Create a new one instead.</p>}
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Label</label>
+                                <input
+                                    type="text"
+                                    value={label}
+                                    onChange={(e) => setLabel(e.target.value)}
+                                    placeholder="e.g. Sales Support"
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-2">Provider</label>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="provider"
+                                        value="msg91"
+                                        checked={provider === "msg91"}
+                                        onChange={(e) => setProvider(e.target.value as any)}
+                                        className="text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-sm text-slate-700 font-medium">MSG91 API</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="provider"
+                                        value="meta"
+                                        checked={provider === "meta"}
+                                        onChange={(e) => setProvider(e.target.value as any)}
+                                        className="text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-sm text-slate-700 font-medium">Direct Meta Cloud API</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {provider === "meta" && (
+                            <div className="bg-blue-50/50 rounded-lg p-4 border border-blue-100 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <p className="text-xs font-medium text-blue-800">Meta WhatsApp Business API Settings</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">WhatsApp Business Account ID (WABA ID)</label>
+                                        <input
+                                            type="text"
+                                            value={metaWabaId}
+                                            onChange={(e) => setMetaWabaId(e.target.value)}
+                                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                            required={provider === "meta"}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number ID</label>
+                                        <input
+                                            type="text"
+                                            value={metaPhoneNumberId}
+                                            onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+                                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                            required={provider === "meta"}
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">System User Access Token</label>
+                                        <input
+                                            type="password"
+                                            value={metaAccessToken}
+                                            onChange={(e) => setMetaAccessToken(e.target.value)}
+                                            placeholder="EAAI..."
+                                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none font-mono"
+                                            required={provider === "meta"}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 justify-end pt-2">
+                            <button
+                                type="button"
+                                onClick={resetForm}
+                                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="px-6 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center gap-2"
+                            >
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                {saving ? "Saving..." : editId ? "Update Configuration" : "Save Number"}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {loading ? (
+                    <div className="col-span-full flex items-center justify-center py-12">
+                        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                    </div>
+                ) : numbers.length === 0 ? (
+                    <div className="col-span-full flex flex-col items-center justify-center py-16 text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm border-dashed">
+                        <User className="w-8 h-8 mb-3 text-slate-300" />
+                        <p className="text-sm font-medium text-slate-600">No numbers configured</p>
+                        <p className="text-xs mt-1 max-w-sm text-center">Add a phone number to start sending and receiving messages.</p>
+                    </div>
+                ) : (
+                    numbers.map((num) => (
+                        <div key={num.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <h4 className="font-semibold text-slate-800 text-base flex items-center gap-2">
+                                        +{num.number}
+                                        {num.isDefault && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Default</span>}
+                                    </h4>
+                                    <p className="text-xs text-slate-500 font-medium mt-0.5">{num.label}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                     <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${num.provider === 'meta' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                        {num.provider || 'MSG91'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end gap-2">
+                                <button
+                                    onClick={() => handleEdit(num)}
+                                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                    title="Edit Configuration"
+                                >
+                                    <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => handleDelete(num.id)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Delete Number"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    ))
                 )}
             </div>
         </div>

@@ -4,6 +4,10 @@ export interface WhatsAppNumber {
   number: string;       // e.g. "919999999999"
   label: string;        // e.g. "Sales", "Support"
   isDefault: boolean;
+  provider?: "msg91" | "meta";
+  metaWabaId?: string;
+  metaPhoneNumberId?: string;
+  metaAccessToken?: string;
 }
 
 // ─── Contact ───────────────────────────────────────────────

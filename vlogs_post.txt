@@ -1,0 +1,2 @@
+Vercel CLI 50.22.0
+Error: unknown or unexpected option: --method

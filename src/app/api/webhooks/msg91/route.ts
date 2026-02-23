@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
 
         // Extract sender name from MSG91 payload if available
         const senderName =
+            body.customerName ||
             body.profile?.name ||
             body.senderName ||
             body.name ||
@@ -72,15 +73,15 @@ export async function POST(request: NextRequest) {
 
         // Extract location data if present
         let locationData = null;
-        if (contentType === "location" && body.location) {
+        if (contentType === "location" && (body.location || (body.latitude && body.longitude))) {
             locationData = {
-                longitude: body.location.longitude,
-                latitude: body.location.latitude,
-                name: body.location.name,
-                address: body.location.address
+                longitude: body.location?.longitude || body.longitude,
+                latitude: body.location?.latitude || body.latitude,
+                name: body.location?.name || "",
+                address: body.location?.address || ""
             };
             if (!messageBody || messageBody === "[media]") {
-                messageBody = `[Location: ${locationData.name || locationData.address || "Shared Location"}]`;
+                messageBody = `[Location]`;
             }
         }
 
@@ -94,46 +95,47 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        if (!senderPhone) {
+        // Use webhookType to identify the exact event type if present
+        const webhookType = body.webhookType?.toString() || "";
+        const eventName = body.eventName?.toString() || body.event?.toString() || "";
+        const messageStatus = body.status?.toString() || "";
+
+        // Let's identify the specific kind of the payload:
+        const isDeliveryReport =
+            webhookType === "3" /* Delivery/Status Event (assuming 3 based on structure, can vary) */ ||
+            /* Known status event names */
+            ['sent', 'delivered', 'read', 'failed'].includes(messageStatus.toLowerCase()) ||
+            ['sent', 'delivered', 'read', 'failed'].includes(eventName.toLowerCase());
+
+        const isOutboundRequestReceived = webhookType === "2" || (!isDeliveryReport && body.direction === "outbound");
+
+        if (!senderPhone && !isDeliveryReport) {
             console.log("[MSG91 Webhook] No sender phone found. Payload keys:", Object.keys(body));
-            // Check if it's a delivery report before failing on missing phone
-            const tempEventName = body.eventName || body.event || "";
-            const tempStatus = body.status || "";
-            if (tempEventName === "message_status" || ['sent', 'delivered', 'read', 'failed'].includes(tempStatus.toLowerCase()) || (!body.content && !body.type && body.status)) {
-                // Allow it to pass down to delivery report parsing
-            } else {
-                return NextResponse.json(
-                    { error: "No sender phone found in payload" },
-                    { status: 400 }
-                );
-            }
+            return NextResponse.json(
+                { error: "No sender phone found in payload" },
+                { status: 400 }
+            );
         }
 
         // Normalize phone (remove + prefix if present)
         const normalizedPhone = senderPhone.replace(/^\+/, "");
         console.log(`[MSG91 Webhook] Processing message from ${normalizedPhone}`);
 
-        const eventName = body.eventName || body.event || "";
-        const messageStatus = body.status || "";
-
         // ─── Handle Delivery Reports (Outbound Message Status) ───
-        // If the webhook is just a status update for a message we sent, it won't have 'content' in the same way,
-        // or it will have a specific eventName or status field.
-        const isDeliveryReport =
-            eventName === "message_status" ||
-            ['sent', 'delivered', 'read', 'failed'].includes(messageStatus.toLowerCase()) ||
-            (!body.content && !body.type && body.status);
 
-        let isExternalOutbound = false;
+        // This denotes if the webhook represents an outbound message initiated from *outside* our CRM
+        let isExternalOutbound = isOutboundRequestReceived;
 
         if (isDeliveryReport) {
+            // Determine actual status
+            const finalStatus = (eventName || messageStatus).toLowerCase();
             if (externalId) {
-                console.log(`[MSG91 Webhook] Processing delivery report for message ${externalId}: ${messageStatus}`);
+                console.log(`[MSG91 Webhook] Processing delivery report for message ${externalId}: ${finalStatus}`);
 
                 // Try to update the message status in our database
                 const { data: updatedMsg, error: updateError } = await supabaseAdmin
                     .from("messages")
-                    .update({ status: messageStatus.toLowerCase() })
+                    .update({ status: finalStatus })
                     .eq("external_id", externalId)
                     .select("id");
 
@@ -272,13 +274,24 @@ export async function POST(request: NextRequest) {
 
         // ─── 3. Insert Message ─────────────────────────────
 
+        // If it's a template payload or campaign, let's parse those properties
+        const msgTemplateName = body.templateName || null;
+        const msgCampaignName = body.campaignName || null;
+
+        // If it's outbound, we want to represent it accurately
+        let finalBody = messageBody;
+        if (isExternalOutbound && !messageBody && msgTemplateName) {
+            finalBody = `[Template: ${msgTemplateName}]`;
+        }
+
         const insertPayload: any = {
             conversation_id: conversation!.id,
             direction: messageDirection,
             content_type: contentType === "contacts" ? "contact" : contentType, // Normalize 'contacts' to 'contact'
-            body: messageBody,
+            body: finalBody,
             media_url: mediaUrl,
             file_name: fileName,
+            template_name: msgTemplateName,
             status: isExternalOutbound ? "sent" : "delivered",
         };
 
