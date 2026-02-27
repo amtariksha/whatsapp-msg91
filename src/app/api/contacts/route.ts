@@ -17,11 +17,16 @@ function mapContact(row: Record<string, unknown>) {
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase();
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "25", 10)));
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
     let query = supabaseAdmin
         .from("contacts")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
     if (search) {
         query = query.or(
@@ -29,14 +34,19 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) {
         console.error("Contacts fetch error:", error);
-        return NextResponse.json([]);
+        return NextResponse.json({ contacts: [], total: 0, page, limit });
     }
 
-    return NextResponse.json((data || []).map(mapContact));
+    return NextResponse.json({
+        contacts: (data || []).map(mapContact),
+        total: count || 0,
+        page,
+        limit,
+    });
 }
 
 // ─── POST /api/contacts ────────────────────────────────────

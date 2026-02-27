@@ -153,10 +153,11 @@ export function useUsers() {
 }
 
 // ─── Contacts ──────────────────────────────────────────────
-export function useContacts(search?: string) {
+export function useContacts(search?: string, page = 1) {
     return useQuery({
-        queryKey: ["contacts", search],
-        queryFn: () => api.getContacts(search),
+        queryKey: ["contacts", search, page],
+        queryFn: () => api.getContacts(search, page),
+        placeholderData: (prev) => prev, // keep previous data while loading next page
     });
 }
 

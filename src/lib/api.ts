@@ -12,6 +12,7 @@ import type {
     QuickReply,
     Reminder,
     LocalTemplate,
+    PaginatedContacts,
 } from "./types";
 
 const BASE_URL = "";
@@ -82,9 +83,11 @@ export async function sendMessage(
 }
 
 // ─── Contacts ──────────────────────────────────────────────
-export async function getContacts(search?: string): Promise<Contact[]> {
+export async function getContacts(search?: string, page = 1, limit = 25): Promise<PaginatedContacts> {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
+    params.set("page", String(page));
+    params.set("limit", String(limit));
     const res = await fetch(`${BASE_URL}/api/contacts?${params.toString()}`);
     if (!res.ok) throw new Error("Failed to fetch contacts");
     return res.json();

@@ -21,6 +21,13 @@ export interface Contact {
   createdAt: string;
 }
 
+export interface PaginatedContacts {
+  contacts: Contact[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 // ─── Message ───────────────────────────────────────────────
 export type MessageDirection = "inbound" | "outbound";
 export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";

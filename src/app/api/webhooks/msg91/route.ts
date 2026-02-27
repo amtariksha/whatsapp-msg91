@@ -299,6 +299,34 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // ─── Deduplication Check ─────────────────────────
+        // If this is an external outbound, check if we already have a recent
+        // outbound message in the same conversation (likely sent from CRM).
+        // MSG91 fires a webhook for messages we already stored via /api/chat/send.
+        if (isExternalOutbound && conversation?.id) {
+            const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
+            const { data: recentMsg } = await supabaseAdmin
+                .from("messages")
+                .select("id")
+                .eq("conversation_id", conversation.id)
+                .eq("direction", "outbound")
+                .gte("created_at", oneMinuteAgo)
+                .limit(1)
+                .maybeSingle();
+
+            if (recentMsg) {
+                // Update the existing message's external_id for future delivery report correlation
+                if (externalId) {
+                    await supabaseAdmin
+                        .from("messages")
+                        .update({ external_id: externalId })
+                        .eq("id", recentMsg.id);
+                }
+                console.log(`[MSG91 Webhook] Skipping duplicate outbound message for conversation ${conversation.id}`);
+                return NextResponse.json({ success: true, type: "duplicate_skipped" });
+            }
+        }
+
         // ─── 3. Insert Message ─────────────────────────────
 
         // If it's a template payload or campaign, let's parse those properties

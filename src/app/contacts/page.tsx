@@ -1,17 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { Users, Search, Mail, Phone, Tag } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Users, Search, Mail, Phone, Tag, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useContacts } from "@/lib/hooks";
 
 export default function ContactsPage() {
     const [search, setSearch] = useState("");
-    const { data: contacts, isLoading } = useContacts(search);
+    const [page, setPage] = useState(1);
+    const { data, isLoading } = useContacts(search, page);
+
+    const contacts = data?.contacts || [];
+    const total = data?.total || 0;
+    const limit = data?.limit || 25;
+    const totalPages = Math.ceil(total / limit);
+
+    // Reset to page 1 when search changes
+    useEffect(() => {
+        setPage(1);
+    }, [search]);
+
+    const showingFrom = total === 0 ? 0 : (page - 1) * limit + 1;
+    const showingTo = Math.min(page * limit, total);
 
     return (
         <div className="h-full overflow-auto p-6 bg-slate-50">
@@ -25,7 +39,7 @@ export default function ContactsPage() {
                         <div>
                             <h1 className="text-xl font-bold text-slate-900">Contacts</h1>
                             <p className="text-sm text-slate-500">
-                                {contacts?.length || 0} contacts
+                                {total} contact{total !== 1 ? "s" : ""}
                             </p>
                         </div>
                     </div>
@@ -52,19 +66,19 @@ export default function ContactsPage() {
                         <div className="col-span-2">Tags</div>
                     </div>
 
-                    <ScrollArea className="max-h-[calc(100vh-240px)]">
-                        {isLoading ? (
+                    <div className="min-h-[400px]">
+                        {isLoading && !contacts.length ? (
                             <div className="flex items-center justify-center py-12">
                                 <div className="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full" />
                             </div>
-                        ) : contacts?.length === 0 ? (
+                        ) : contacts.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                                 <Users className="w-8 h-8 mb-2" />
                                 <p className="text-sm">No contacts found</p>
                             </div>
                         ) : (
                             <div className="divide-y divide-slate-50">
-                                {contacts?.map((contact) => {
+                                {contacts.map((contact) => {
                                     const initials = contact.name
                                         .split(" ")
                                         .map((n) => n[0])
@@ -107,7 +121,7 @@ export default function ContactsPage() {
                                             </div>
                                             <div className="col-span-3 flex items-center gap-1.5 text-sm text-slate-600 truncate">
                                                 <Mail className="w-3.5 h-3.5 text-slate-400" />
-                                                {contact.email || "—"}
+                                                {contact.email || "\u2014"}
                                             </div>
                                             <div className="col-span-2 flex flex-wrap gap-1">
                                                 {contact.tags.map((tag) => (
@@ -125,7 +139,41 @@ export default function ContactsPage() {
                                 })}
                             </div>
                         )}
-                    </ScrollArea>
+                    </div>
+
+                    {/* Pagination */}
+                    {total > 0 && (
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/30">
+                            <p className="text-sm text-slate-500">
+                                Showing {showingFrom}\u2013{showingTo} of {total}
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    disabled={page <= 1}
+                                    className="h-8 px-3 text-xs"
+                                >
+                                    <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                                    Previous
+                                </Button>
+                                <span className="text-sm text-slate-600 tabular-nums">
+                                    Page {page} of {totalPages}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={page >= totalPages}
+                                    className="h-8 px-3 text-xs"
+                                >
+                                    Next
+                                    <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
