@@ -300,5 +300,10 @@ export async function POST(request: NextRequest) {
         isInternalNote: message.is_internal_note || false,
         timestamp: message.created_at,
         providerResponse: finalResponse,
+        providerError: finalStatus === "failed" ? {
+            provider,
+            response: finalResponse,
+            hint: "Check MSG91/Meta dashboard for details. Common causes: invalid auth key, expired session window, insufficient credits, or number not registered.",
+        } : undefined,
     });
 }

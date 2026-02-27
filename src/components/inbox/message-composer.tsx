@@ -11,6 +11,7 @@ import {
     X,
     Image as ImageIcon,
     MessageSquareText,
+    IndianRupee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +29,8 @@ import { TemplatePickerDialog } from "./template-picker-dialog";
 import { InteractiveMessageDialog } from "./interactive-message-dialog";
 import { LocationMessageDialog } from "./location-message-dialog";
 import { ContactMessageDialog } from "./contact-message-dialog";
+import { PaymentLinkDialog } from "../payments/payment-link-dialog";
+import { getContactDisplayName } from "@/lib/utils";
 import type { Conversation } from "@/lib/types";
 
 interface MessageComposerProps {
@@ -41,6 +44,7 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     const [interactiveDialogOpen, setInteractiveDialogOpen] = useState(false);
     const [locationDialogOpen, setLocationDialogOpen] = useState(false);
     const [contactDialogOpen, setContactDialogOpen] = useState(false);
+    const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [attachedFile, setAttachedFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -374,6 +378,23 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                             </Tooltip>
                         )}
 
+                        {!isInternalNote && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setPaymentDialogOpen(true)}
+                                        className="h-9 w-9 text-slate-400 hover:text-emerald-600"
+                                    >
+                                        <IndianRupee className="w-4.5 h-4.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Send Payment Link</TooltipContent>
+                            </Tooltip>
+                        )}
+
                         <Button
                             type="submit"
                             size="icon"
@@ -423,6 +444,16 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                 onOpenChange={setContactDialogOpen}
                 conversation={conversation}
                 onSent={() => { }}
+            />
+
+            {/* Payment Link Dialog */}
+            <PaymentLinkDialog
+                open={paymentDialogOpen}
+                onOpenChange={setPaymentDialogOpen}
+                conversationId={conversation.id}
+                contactId={conversation.contact.id}
+                contactName={getContactDisplayName(conversation.contact)}
+                phone={conversation.contact.phone}
             />
         </>
     );

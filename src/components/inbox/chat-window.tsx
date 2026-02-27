@@ -43,7 +43,7 @@ function StatusIcon({ status }: { status: MessageStatus }) {
         case "read":
             return <CheckCheck className="w-3.5 h-3.5 text-blue-500" />;
         case "failed":
-            return <AlertCircle className="w-3.5 h-3.5 text-red-500" />;
+            return <span title="Delivery failed — check MSG91/Meta dashboard or server logs"><AlertCircle className="w-3.5 h-3.5 text-red-500" /></span>;
         default:
             return null;
     }

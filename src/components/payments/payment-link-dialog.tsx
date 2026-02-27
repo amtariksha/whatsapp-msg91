@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { IndianRupee, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,17 @@ export function PaymentLinkDialog({
     const [amount, setAmount] = useState("");
     const [description, setDescription] = useState("");
     const [sendViaWA, setSendViaWA] = useState(true);
+
+    // Reset form when dialog opens with new props
+    useEffect(() => {
+        if (open) {
+            setName(initialName || "");
+            setPhone(initialPhone || "");
+            setAmount("");
+            setDescription("");
+            setSendViaWA(true);
+        }
+    }, [open, initialName, initialPhone]);
 
     const canSubmit =
         name.trim() && phone.trim() && amount && parseFloat(amount) > 0;
