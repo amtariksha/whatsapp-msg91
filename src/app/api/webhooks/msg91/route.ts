@@ -125,9 +125,10 @@ export async function POST(request: NextRequest) {
         // ─── Detect Business App Messages ────────────────────
         // MSG91 doesn't send webhookType or direction for messages sent from the
         // WhatsApp Business App. Detect them by checking if the sender phone
-        // matches a known business number from our integrated_numbers table.
+        // matches a known business number.
         let isSenderBusinessNumber = false;
         if (normalizedPhone && !isDeliveryReport) {
+            // Check 1: Look up in integrated_numbers DB table
             const { data: matchedNumber } = await supabaseAdmin
                 .from("integrated_numbers")
                 .select("number")
@@ -137,6 +138,22 @@ export async function POST(request: NextRequest) {
                 .maybeSingle();
             if (matchedNumber) {
                 isSenderBusinessNumber = true;
+            }
+
+            // Check 2: Fallback to env var (numbers may not be in DB)
+            if (!isSenderBusinessNumber) {
+                const envSingleNumber = (process.env.MSG91_INTEGRATED_NUMBER || "").replace(/^\+/, "");
+                const envMultipleNumbers = (process.env.MSG91_INTEGRATED_NUMBERS || "")
+                    .split(",")
+                    .map(entry => entry.split(":")[0].trim().replace(/^\+/, ""))
+                    .filter(Boolean);
+                const allEnvNumbers = [envSingleNumber, ...envMultipleNumbers].filter(Boolean);
+                if (allEnvNumbers.includes(normalizedPhone)) {
+                    isSenderBusinessNumber = true;
+                }
+            }
+
+            if (isSenderBusinessNumber) {
                 console.log(`[MSG91 Webhook] Sender ${normalizedPhone} is a known business number`);
             }
         }
@@ -393,6 +410,18 @@ export async function POST(request: NextRequest) {
             finalBody = `[Template: ${msgTemplateName}]`;
         }
 
+        // Determine message source for sender icon differentiation
+        let messageSource = "customer"; // default: inbound from customer
+        if (isExternalOutbound) {
+            if (msgCampaignName) {
+                messageSource = "broadcast";
+            } else if (isSenderBusinessNumber) {
+                messageSource = "mobile_app"; // sent from WhatsApp Business mobile app
+            } else {
+                messageSource = "api"; // sent via MSG91 API from external system
+            }
+        }
+
         const insertPayload: any = {
             conversation_id: conversation!.id,
             direction: messageDirection,
@@ -402,6 +431,7 @@ export async function POST(request: NextRequest) {
             file_name: fileName,
             template_name: msgTemplateName,
             status: isExternalOutbound ? "sent" : "delivered",
+            source: messageSource,
         };
 
         if (locationData) {

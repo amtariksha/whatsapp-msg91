@@ -280,6 +280,7 @@ export async function POST(request: NextRequest) {
             integrated_number: sendFromNumber,
             request_id: providerMessageId,
             external_id: providerMessageId,
+            source: "webapp",
         })
         .select()
         .single();
@@ -315,6 +316,7 @@ export async function POST(request: NextRequest) {
         status: message.status || "sent",
         isInternalNote: message.is_internal_note || false,
         timestamp: message.created_at,
+        source: message.source || "webapp",
         providerResponse: finalResponse,
         providerError: finalStatus === "failed" ? {
             provider,

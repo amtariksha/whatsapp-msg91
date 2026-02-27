@@ -32,6 +32,7 @@ export interface PaginatedContacts {
 export type MessageDirection = "inbound" | "outbound";
 export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
 export type MessageContentType = "text" | "image" | "document" | "template" | "interactive" | "location" | "contact";
+export type MessageSource = "webapp" | "mobile_app" | "api" | "broadcast" | "customer";
 
 export interface Message {
   id: string;
@@ -44,6 +45,7 @@ export interface Message {
   status: MessageStatus;
   isInternalNote: boolean;
   timestamp: string;
+  source?: MessageSource;
 }
 
 // ─── Conversation ──────────────────────────────────────────

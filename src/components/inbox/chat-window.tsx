@@ -14,6 +14,10 @@ import {
     ChevronDown,
     ChevronLeft,
     MessageSquareText,
+    Monitor,
+    Smartphone,
+    Radio,
+    Webhook,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,8 +33,42 @@ import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/components/auth-provider";
 import { MessageComposer } from "./message-composer";
 import { ReminderDialog } from "./reminder-dialog";
-import type { Message, MessageStatus } from "@/lib/types";
+import type { Message, MessageStatus, MessageSource } from "@/lib/types";
 import { SessionTimer } from "./session-timer";
+
+const SOURCE_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
+    webapp: {
+        icon: <Monitor className="w-3 h-3" />,
+        label: "CRM Webapp",
+        color: "text-emerald-600",
+    },
+    mobile_app: {
+        icon: <Smartphone className="w-3 h-3" />,
+        label: "WhatsApp Mobile App",
+        color: "text-blue-600",
+    },
+    api: {
+        icon: <Webhook className="w-3 h-3" />,
+        label: "External API",
+        color: "text-purple-600",
+    },
+    broadcast: {
+        icon: <Radio className="w-3 h-3" />,
+        label: "Broadcast Campaign",
+        color: "text-orange-600",
+    },
+};
+
+function SourceIcon({ source }: { source?: MessageSource }) {
+    if (!source || source === "customer") return null;
+    const config = SOURCE_CONFIG[source];
+    if (!config) return null;
+    return (
+        <span title={config.label} className={`inline-flex items-center ${config.color}`}>
+            {config.icon}
+        </span>
+    );
+}
 
 function StatusIcon({ status }: { status: MessageStatus }) {
     switch (status) {
@@ -206,6 +244,7 @@ function MessageBubble({ message }: { message: Message }) {
                                 : "text-slate-400"
                     )}
                 >
+                    {isOutbound && !isNote && <SourceIcon source={message.source} />}
                     <span className="text-[10px]">{time}</span>
                     {isOutbound && !isNote && <StatusIcon status={message.status} />}
                 </div>

@@ -238,6 +238,7 @@ export async function POST(request: NextRequest) {
             integrated_number: sendFromNumber,
             external_id: providerMessageId || null,
             request_id: providerMessageId || null,
+            source: "webapp",
         });
 
         // Update conversation last message

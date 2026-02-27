@@ -13,6 +13,7 @@ function mapMessage(row: Record<string, unknown>) {
         status: row.status || "sent",
         isInternalNote: row.is_internal_note || false,
         timestamp: row.created_at,
+        source: row.source || undefined,
     };
 }
 

@@ -146,6 +146,7 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_ref TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS external_id TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_internal_note BOOLEAN DEFAULT false;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'webapp';
 
 -- ─── Indexes ──────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_conversations_contact ON conversations(contact_id);

@@ -17,6 +17,26 @@ export async function POST(
         );
     }
 
+    // Get the integrated number (required by MSG91)
+    let integratedNumber = "";
+    const { data: dbNumbers } = await supabaseAdmin
+        .from("integrated_numbers")
+        .select("number")
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle();
+    if (dbNumbers?.number) {
+        integratedNumber = dbNumbers.number;
+    } else {
+        // Fallback to env var
+        integratedNumber = (process.env.MSG91_INTEGRATED_NUMBER || "").replace(/^\+/, "");
+        if (!integratedNumber) {
+            const envNumbers = process.env.MSG91_INTEGRATED_NUMBERS || "";
+            const firstEntry = envNumbers.split(",")[0] || "";
+            integratedNumber = firstEntry.split(":")[0].trim().replace(/^\+/, "");
+        }
+    }
+
     // Fetch the local template
     const { data: template, error: fetchError } = await supabaseAdmin
         .from("templates_local")
@@ -77,12 +97,17 @@ export async function POST(
         });
     }
 
-    const msg91Payload = {
+    const msg91Payload: Record<string, unknown> = {
         name: template.name,
         category: template.category || "MARKETING",
         language: template.language || "en",
         components,
     };
+
+    // Include integrated_number if available
+    if (integratedNumber) {
+        msg91Payload.integrated_number = integratedNumber;
+    }
 
     try {
         console.log("[Template Submit] Submitting to MSG91:", JSON.stringify(msg91Payload, null, 2));
@@ -92,7 +117,7 @@ export async function POST(
             {
                 method: "POST",
                 headers: {
-                    authkey: authKey,
+                    Authkey: authKey,
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify(msg91Payload),
@@ -111,9 +136,13 @@ export async function POST(
 
         if (!response.ok) {
             console.error("[Template Submit] MSG91 HTTP error:", response.status, responseText);
+            // Extract the most useful error message from MSG91's response
+            const msg91Error = typeof responseData === "object"
+                ? (responseData?.message || responseData?.errors || responseData?.error || responseText)
+                : responseText;
             return NextResponse.json(
                 {
-                    error: "MSG91 rejected the template submission",
+                    error: `MSG91 error (${response.status}): ${typeof msg91Error === "string" ? msg91Error : JSON.stringify(msg91Error)}`,
                     details: responseData,
                 },
                 { status: 502 }
@@ -122,9 +151,10 @@ export async function POST(
 
         if (typeof responseData === "object" && responseData?.hasError) {
             console.error("[Template Submit] MSG91 API error:", responseText);
+            const msg91Error = responseData.errors || responseData.message || "MSG91 returned an error";
             return NextResponse.json(
                 {
-                    error: responseData.errors || "MSG91 returned an error",
+                    error: typeof msg91Error === "string" ? msg91Error : JSON.stringify(msg91Error),
                     details: responseData,
                 },
                 { status: 502 }
