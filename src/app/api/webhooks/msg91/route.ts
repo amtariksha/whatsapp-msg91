@@ -122,10 +122,29 @@ export async function POST(request: NextRequest) {
         const normalizedPhone = senderPhone.replace(/^\+/, "");
         console.log(`[MSG91 Webhook] Processing message from ${normalizedPhone}`);
 
+        // ─── Detect Business App Messages ────────────────────
+        // MSG91 doesn't send webhookType or direction for messages sent from the
+        // WhatsApp Business App. Detect them by checking if the sender phone
+        // matches a known business number from our integrated_numbers table.
+        let isSenderBusinessNumber = false;
+        if (normalizedPhone && !isDeliveryReport) {
+            const { data: matchedNumber } = await supabaseAdmin
+                .from("integrated_numbers")
+                .select("number")
+                .eq("number", normalizedPhone)
+                .eq("active", true)
+                .limit(1)
+                .maybeSingle();
+            if (matchedNumber) {
+                isSenderBusinessNumber = true;
+                console.log(`[MSG91 Webhook] Sender ${normalizedPhone} is a known business number`);
+            }
+        }
+
         // ─── Handle Delivery Reports (Outbound Message Status) ───
 
         // This denotes if the webhook represents an outbound message initiated from *outside* our CRM
-        let isExternalOutbound = isOutboundRequestReceived;
+        let isExternalOutbound = isOutboundRequestReceived || isSenderBusinessNumber;
 
         if (isDeliveryReport) {
             // Determine actual status

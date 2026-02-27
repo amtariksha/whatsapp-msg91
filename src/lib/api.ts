@@ -269,6 +269,21 @@ export async function deleteLocalTemplate(id: string): Promise<void> {
     if (!res.ok) throw new Error("Failed to delete template");
 }
 
+export async function submitLocalTemplate(id: string): Promise<{
+    success: boolean;
+    status: string;
+    msg91TemplateId?: string;
+    error?: string;
+    details?: unknown;
+}> {
+    const res = await fetch(`${BASE_URL}/api/templates/local/${id}/submit`, {
+        method: "POST",
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to submit template");
+    return data;
+}
+
 export async function syncTemplates(): Promise<{ synced: number }> {
     const res = await fetch(`${BASE_URL}/api/templates/sync`, {
         method: "POST",

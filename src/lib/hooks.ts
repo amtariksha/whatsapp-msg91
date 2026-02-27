@@ -323,6 +323,7 @@ export function usePayments(params?: {
 
 export function useCreatePayment() {
     const queryClient = useQueryClient();
+    const activeConversationId = useAppStore((s) => s.activeConversationId);
 
     return useMutation({
         mutationFn: (payload: CreatePaymentPayload) =>
@@ -330,6 +331,12 @@ export function useCreatePayment() {
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ["payments"] });
             queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            // Refetch the active conversation's messages so the payment link appears immediately
+            if (activeConversationId) {
+                queryClient.invalidateQueries({
+                    queryKey: ["conversation", activeConversationId],
+                });
+            }
         },
     });
 }

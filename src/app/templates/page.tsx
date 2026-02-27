@@ -15,6 +15,7 @@ import {
     Copy,
     Clipboard,
     Trash2,
+    Send,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -128,6 +129,9 @@ export default function TemplatesPage() {
     // Clipboard toast
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
+    // Submission state
+    const [submittingId, setSubmittingId] = useState<string | null>(null);
+
     const fetchLocalTemplates = async () => {
         try {
             const res = await fetch("/api/templates/local");
@@ -206,6 +210,25 @@ export default function TemplatesPage() {
         navigator.clipboard.writeText(id);
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    const handleSubmitForApproval = async (id: string) => {
+        if (!confirm("Submit this template for Facebook/WhatsApp approval? Once submitted, it will be reviewed by Meta.")) return;
+        setSubmittingId(id);
+        try {
+            const res = await fetch(`/api/templates/local/${id}/submit`, { method: "POST" });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(`Submission failed: ${data.error || "Unknown error"}`);
+                return;
+            }
+            fetchLocalTemplates();
+        } catch (e) {
+            console.error("Submit failed:", e);
+            alert("Failed to submit template. Please try again.");
+        } finally {
+            setSubmittingId(null);
+        }
     };
 
     if (user?.role !== "admin") {
@@ -328,6 +351,19 @@ export default function TemplatesPage() {
                                                     <Copy className="w-4 h-4 mr-2" />
                                                     Duplicate
                                                 </DropdownMenuItem>
+                                                {(t.status === "draft" || t.status === "rejected") && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => handleSubmitForApproval(t.id)}
+                                                        disabled={submittingId === t.id}
+                                                    >
+                                                        {submittingId === t.id ? (
+                                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                        ) : (
+                                                            <Send className="w-4 h-4 mr-2" />
+                                                        )}
+                                                        {submittingId === t.id ? "Submitting..." : "Submit for Approval"}
+                                                    </DropdownMenuItem>
+                                                )}
                                                 <DropdownMenuItem onClick={() => handleCopyId(t.id)}>
                                                     <Clipboard className="w-4 h-4 mr-2" />
                                                     {copiedId === t.id ? "Copied!" : "Copy ID"}
@@ -492,6 +528,23 @@ export default function TemplatesPage() {
                                     <Pencil className="w-3.5 h-3.5" />
                                     Edit
                                 </Button>
+                                {(viewTemplate.status === "draft" || viewTemplate.status === "rejected") && (
+                                    <Button
+                                        size="sm"
+                                        disabled={submittingId === viewTemplate.id}
+                                        onClick={() => {
+                                            handleSubmitForApproval(viewTemplate.id);
+                                        }}
+                                        className="gap-1.5 text-xs bg-blue-500 hover:bg-blue-600"
+                                    >
+                                        {submittingId === viewTemplate.id ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <Send className="w-3.5 h-3.5" />
+                                        )}
+                                        {submittingId === viewTemplate.id ? "Submitting..." : "Submit for Approval"}
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     )}
