@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "template",
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "template",
                 template: {
                     name: templateName,
@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: mediaType,
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: mediaType,
                 [mediaType]: {
                     link: mediaUrl,
@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "location",
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "location",
                 location: {
                     longitude: location.longitude,
@@ -82,8 +82,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "contacts", // MSG91 uses 'contacts' for the type
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "contacts",
                 contacts: contacts,
             },
@@ -94,8 +94,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "interactive",
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "interactive",
                 interactive: interactive,
             },
@@ -107,8 +107,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "text",
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "text",
                 text: { body: text },
             },
@@ -228,7 +228,12 @@ export async function POST(request: NextRequest) {
             try { finalResponse = JSON.parse(responseText); } catch { finalResponse = responseText; }
 
             if (!response.ok) {
-                console.error("[Chat Send] MSG91 error:", response.status, responseText);
+                console.error("[Chat Send] MSG91 HTTP error:", response.status, responseText);
+                console.error("[Chat Send] Payload was:", JSON.stringify(msg91Payload, null, 2));
+                finalStatus = "failed";
+            } else if (typeof finalResponse === "object" && finalResponse !== null && (finalResponse as any).hasError) {
+                // MSG91 sometimes returns 200 with { hasError: true, errors: "..." }
+                console.error("[Chat Send] MSG91 API error:", responseText);
                 console.error("[Chat Send] Payload was:", JSON.stringify(msg91Payload, null, 2));
                 finalStatus = "failed";
             } else {

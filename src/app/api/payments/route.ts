@@ -199,8 +199,8 @@ export async function POST(request: NextRequest) {
                         body: JSON.stringify({
                             integrated_number: sendFromNumber,
                             content_type: "text",
+                            recipient_number: cleanPhone,
                             payload: {
-                                to: cleanPhone,
                                 type: "text",
                                 text: { body: messageText },
                             },
@@ -213,7 +213,9 @@ export async function POST(request: NextRequest) {
                 try { responseData = JSON.parse(responseText); } catch { responseData = responseText; }
 
                 if (!response.ok) {
-                    console.error("[Payment WA Send] MSG91 error:", response.status, responseText);
+                    console.error("[Payment WA Send] MSG91 HTTP error:", response.status, responseText);
+                } else if (typeof responseData === "object" && responseData !== null && responseData.hasError) {
+                    console.error("[Payment WA Send] MSG91 API error:", responseText);
                 } else {
                     console.log("[Payment WA Send] MSG91 success:", responseText);
                     sendStatus = "sent";
