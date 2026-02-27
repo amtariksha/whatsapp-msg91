@@ -143,6 +143,9 @@ CREATE TABLE IF NOT EXISTS integrated_numbers (
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_ref TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS external_id TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_internal_note BOOLEAN DEFAULT false;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT;
 
 -- ─── Indexes ──────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_conversations_contact ON conversations(contact_id);
@@ -155,6 +158,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_phone ON payments(phone);
 CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
 CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at);
 CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phone);
+CREATE INDEX IF NOT EXISTS idx_messages_external_id ON messages(external_id);
 
 -- ─── RLS (enable on all tables) ───────────────────────────────
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;

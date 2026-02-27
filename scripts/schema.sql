@@ -37,6 +37,11 @@ create table if not exists messages (
   body text,
   media_url text,
   file_name text,
+  template_name text,
+  msg91_message_id text,
+  request_id text,
+  external_id text,
+  integrated_number text,
   status text default 'sent',
   is_internal_note boolean default false,
   created_at timestamptz default now()
@@ -123,6 +128,7 @@ create index if not exists idx_payments_contact on payments(contact_id);
 create index if not exists idx_payments_status on payments(payment_status);
 create index if not exists idx_contacts_phone on contacts(phone);
 create index if not exists idx_users_email on users(email);
+create index if not exists idx_messages_external_id on messages(external_id);
 create index if not exists idx_reminders_user on reminders(user_id);
 create index if not exists idx_reminders_remind_at on reminders(remind_at);
 create index if not exists idx_quick_replies_shortcut on quick_replies(shortcut);

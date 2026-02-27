@@ -89,6 +89,15 @@ export function useSendMessage() {
 
             return { previousConversation };
         },
+        onSuccess: (data: any) => {
+            if (data?.status === "failed" && data?.providerError) {
+                console.error(
+                    `[SendMessage] Message delivery failed via ${data.providerError.provider}:`,
+                    data.providerError.response,
+                    "\nHint:", data.providerError.hint
+                );
+            }
+        },
         onError: (_err, _payload, context) => {
             if (context?.previousConversation) {
                 queryClient.setQueryData(

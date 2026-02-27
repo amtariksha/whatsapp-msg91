@@ -25,21 +25,33 @@ export async function POST(request: NextRequest) {
     // Default to msg91 if not found in db
     const provider = numConfig?.provider || "msg91";
 
+    // MSG91 has two different APIs:
+    //   Template messages → POST .../whatsapp-outbound-message/bulk/  (nested payload with to_and_components)
+    //   Session messages  → POST .../whatsapp-outbound-message/       (flat structure)
+    // See: https://docs.msg91.com/whatsapp
     let msg91Payload: Record<string, unknown>;
+    let msg91Endpoint = "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/";
     let messageBody = "";
 
     if (contentType === "template") {
         const { templateName, templateLanguage, components } = body;
+        // Template API uses the bulk endpoint with to_and_components
+        msg91Endpoint = "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "template",
             payload: {
-                to: phone,
+                messaging_product: "whatsapp",
                 type: "template",
                 template: {
                     name: templateName,
                     language: { code: templateLanguage || "en" },
-                    components: components || [],
+                    to_and_components: [
+                        {
+                            to: [phone],
+                            components: components || {},
+                        },
+                    ],
                 },
             },
         };
@@ -50,8 +62,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: mediaType,
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: mediaType,
                 [mediaType]: {
                     link: mediaUrl,
@@ -65,8 +77,8 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "location",
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "location",
                 location: {
                     longitude: location.longitude,
@@ -81,9 +93,9 @@ export async function POST(request: NextRequest) {
         const { contacts } = body as Record<string, any>;
         msg91Payload = {
             integrated_number: sendFromNumber,
-            content_type: "contacts", // MSG91 uses 'contacts' for the type
+            content_type: "contacts",
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "contacts",
                 contacts: contacts,
             },
@@ -94,24 +106,21 @@ export async function POST(request: NextRequest) {
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "interactive",
+            recipient_number: phone,
             payload: {
-                to: phone,
                 type: "interactive",
                 interactive: interactive,
             },
         };
-        // For local storage, if it's buttons, we want to store the body text
         messageBody = interactive?.body?.text || text || "[Interactive Message]";
     } else {
+        // Session text message — flat structure, no nested payload
         const { text } = body;
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "text",
-            payload: {
-                to: phone,
-                type: "text",
-                text: { body: text },
-            },
+            recipient_number: phone,
+            text: text,
         };
         messageBody = text;
     }
@@ -212,12 +221,14 @@ export async function POST(request: NextRequest) {
         }
 
         try {
+            console.log(`[Chat Send] MSG91 endpoint: ${msg91Endpoint}`);
+            console.log(`[Chat Send] MSG91 payload:`, JSON.stringify(msg91Payload, null, 2));
             const response = await fetch(
-                "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/",
+                msg91Endpoint,
                 {
                     method: "POST",
                     headers: {
-                        authkey: authKey,
+                        Authkey: authKey,
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify(msg91Payload),
@@ -228,7 +239,12 @@ export async function POST(request: NextRequest) {
             try { finalResponse = JSON.parse(responseText); } catch { finalResponse = responseText; }
 
             if (!response.ok) {
-                console.error("[Chat Send] MSG91 error:", response.status, responseText);
+                console.error("[Chat Send] MSG91 HTTP error:", response.status, responseText);
+                console.error("[Chat Send] Payload was:", JSON.stringify(msg91Payload, null, 2));
+                finalStatus = "failed";
+            } else if (typeof finalResponse === "object" && finalResponse !== null && (finalResponse as any).hasError) {
+                // MSG91 sometimes returns 200 with { hasError: true, errors: "..." }
+                console.error("[Chat Send] MSG91 API error:", responseText);
                 console.error("[Chat Send] Payload was:", JSON.stringify(msg91Payload, null, 2));
                 finalStatus = "failed";
             } else {
@@ -239,6 +255,15 @@ export async function POST(request: NextRequest) {
             finalStatus = "failed";
         }
     }
+
+    // Extract provider message ID for delivery report correlation
+    const metaMessageId = provider === "meta" && (finalResponse as any)?.messages?.[0]?.id
+        ? (finalResponse as any).messages[0].id
+        : undefined;
+    const msg91RequestId = provider !== "meta" && typeof finalResponse === "object" && finalResponse !== null
+        ? ((finalResponse as any).data?.requestId || (finalResponse as any).requestId || (finalResponse as any).data?.request_id)
+        : undefined;
+    const providerMessageId = metaMessageId || msg91RequestId || undefined;
 
     // ─── Persist message in Supabase ─────────────────────────
     const { data: message, error: msgError } = await supabaseAdmin
@@ -253,9 +278,8 @@ export async function POST(request: NextRequest) {
             status: finalStatus,
             is_internal_note: false,
             integrated_number: sendFromNumber,
-            request_id: provider === "meta" && (finalResponse as any)?.messages?.[0]?.id
-                ? (finalResponse as any).messages[0].id
-                : undefined,
+            request_id: providerMessageId,
+            external_id: providerMessageId,
         })
         .select()
         .single();
@@ -292,5 +316,10 @@ export async function POST(request: NextRequest) {
         isInternalNote: message.is_internal_note || false,
         timestamp: message.created_at,
         providerResponse: finalResponse,
+        providerError: finalStatus === "failed" ? {
+            provider,
+            response: finalResponse,
+            hint: "Check MSG91/Meta dashboard for details. Common causes: invalid auth key, expired session window, insufficient credits, or number not registered.",
+        } : undefined,
     });
 }

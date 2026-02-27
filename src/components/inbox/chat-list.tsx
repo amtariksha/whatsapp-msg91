@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { cn, formatChatTime, truncate } from "@/lib/utils";
+import { cn, formatChatTime, truncate, getContactDisplayName } from "@/lib/utils";
 import { useConversations } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 import type { Conversation } from "@/lib/types";
@@ -98,9 +98,7 @@ function ConversationItem({
     onClick: () => void;
 }) {
     // Determine contact name or fallback to phone
-    const displayName = conversation.contact.name && conversation.contact.name !== "Unknown"
-        ? conversation.contact.name
-        : `+${conversation.contact.phone}`;
+    const displayName = getContactDisplayName(conversation.contact);
 
     return (
         <button

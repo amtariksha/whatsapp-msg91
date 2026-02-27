@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { isPlaceholderName } from "@/lib/utils";
 
 // ─── POST /api/webhooks/msg91 — Receive inbound messages ──
 export async function POST(request: NextRequest) {
@@ -133,11 +134,30 @@ export async function POST(request: NextRequest) {
                 console.log(`[MSG91 Webhook] Processing delivery report for message ${externalId}: ${finalStatus}`);
 
                 // Try to update the message status in our database
-                const { data: updatedMsg, error: updateError } = await supabaseAdmin
+                // First try external_id, then fallback to request_id
+                let updatedMsg: any[] | null = null;
+                let updateError: any = null;
+
+                const result1 = await supabaseAdmin
                     .from("messages")
                     .update({ status: finalStatus })
                     .eq("external_id", externalId)
                     .select("id");
+                updatedMsg = result1.data;
+                updateError = result1.error;
+
+                // Fallback: try request_id for backward compatibility
+                if (!updatedMsg || updatedMsg.length === 0) {
+                    const result2 = await supabaseAdmin
+                        .from("messages")
+                        .update({ status: finalStatus })
+                        .eq("request_id", externalId)
+                        .select("id");
+                    if (result2.data && result2.data.length > 0) {
+                        updatedMsg = result2.data;
+                        updateError = result2.error;
+                    }
+                }
 
                 if (updateError) {
                     console.error("[MSG91 Webhook] Error updating message status:", updateError);
@@ -192,7 +212,7 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (!contact) {
-            const contactDisplayName = isExternalOutbound ? actualCustomerPhone : (senderName || actualCustomerPhone);
+            const contactDisplayName = senderName || actualCustomerPhone;
             const { data: newContact, error: contactError } = await supabaseAdmin
                 .from("contacts")
                 .insert({
@@ -208,6 +228,13 @@ export async function POST(request: NextRequest) {
             }
             contact = newContact;
             console.log(`[MSG91 Webhook] Created contact: ${contact!.id}`);
+        } else if (senderName && isPlaceholderName(contact.name) && !isPlaceholderName(senderName)) {
+            // Update contact name if we have a better one from the webhook
+            await supabaseAdmin
+                .from("contacts")
+                .update({ name: senderName })
+                .eq("id", contact.id);
+            console.log(`[MSG91 Webhook] Updated contact name to "${senderName}"`);
         }
 
         // ─── 2. Upsert Conversation ────────────────────────
