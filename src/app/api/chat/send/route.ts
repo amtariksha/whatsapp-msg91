@@ -25,21 +25,33 @@ export async function POST(request: NextRequest) {
     // Default to msg91 if not found in db
     const provider = numConfig?.provider || "msg91";
 
+    // MSG91 has two different APIs:
+    //   Template messages → POST .../whatsapp-outbound-message/bulk/  (nested payload with to_and_components)
+    //   Session messages  → POST .../whatsapp-outbound-message/       (flat structure)
+    // See: https://docs.msg91.com/whatsapp
     let msg91Payload: Record<string, unknown>;
+    let msg91Endpoint = "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/";
     let messageBody = "";
 
     if (contentType === "template") {
         const { templateName, templateLanguage, components } = body;
+        // Template API uses the bulk endpoint with to_and_components
+        msg91Endpoint = "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "template",
-            recipient_number: phone,
             payload: {
+                messaging_product: "whatsapp",
                 type: "template",
                 template: {
                     name: templateName,
                     language: { code: templateLanguage || "en" },
-                    components: components || [],
+                    to_and_components: [
+                        {
+                            to: [phone],
+                            components: components || {},
+                        },
+                    ],
                 },
             },
         };
@@ -81,7 +93,7 @@ export async function POST(request: NextRequest) {
         const { contacts } = body as Record<string, any>;
         msg91Payload = {
             integrated_number: sendFromNumber,
-            content_type: "contacts", // MSG91 uses 'contacts' for the type
+            content_type: "contacts",
             recipient_number: phone,
             payload: {
                 type: "contacts",
@@ -100,18 +112,15 @@ export async function POST(request: NextRequest) {
                 interactive: interactive,
             },
         };
-        // For local storage, if it's buttons, we want to store the body text
         messageBody = interactive?.body?.text || text || "[Interactive Message]";
     } else {
+        // Session text message — flat structure, no nested payload
         const { text } = body;
         msg91Payload = {
             integrated_number: sendFromNumber,
             content_type: "text",
             recipient_number: phone,
-            payload: {
-                type: "text",
-                text: { body: text },
-            },
+            text: text,
         };
         messageBody = text;
     }
@@ -212,12 +221,14 @@ export async function POST(request: NextRequest) {
         }
 
         try {
+            console.log(`[Chat Send] MSG91 endpoint: ${msg91Endpoint}`);
+            console.log(`[Chat Send] MSG91 payload:`, JSON.stringify(msg91Payload, null, 2));
             const response = await fetch(
-                "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/",
+                msg91Endpoint,
                 {
                     method: "POST",
                     headers: {
-                        authkey: authKey,
+                        Authkey: authKey,
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify(msg91Payload),

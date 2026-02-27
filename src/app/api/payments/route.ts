@@ -189,21 +189,18 @@ export async function POST(request: NextRequest) {
         if (msgAuthKey) {
             try {
                 const response = await fetch(
-                    "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/",
+                    "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/",
                     {
                         method: "POST",
                         headers: {
-                            authkey: msgAuthKey,
+                            Authkey: msgAuthKey,
                             "Content-Type": "application/json",
                         },
                         body: JSON.stringify({
                             integrated_number: sendFromNumber,
                             content_type: "text",
                             recipient_number: cleanPhone,
-                            payload: {
-                                type: "text",
-                                text: { body: messageText },
-                            },
+                            text: messageText,
                         }),
                     }
                 );
