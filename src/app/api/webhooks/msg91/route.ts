@@ -300,30 +300,65 @@ export async function POST(request: NextRequest) {
         }
 
         // ─── Deduplication Check ─────────────────────────
-        // If this is an external outbound, check if we already have a recent
-        // outbound message in the same conversation (likely sent from CRM).
-        // MSG91 fires a webhook for messages we already stored via /api/chat/send.
-        if (isExternalOutbound && conversation?.id) {
-            const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
-            const { data: recentMsg } = await supabaseAdmin
-                .from("messages")
-                .select("id")
-                .eq("conversation_id", conversation.id)
-                .eq("direction", "outbound")
-                .gte("created_at", oneMinuteAgo)
-                .limit(1)
-                .maybeSingle();
+        // MSG91 echoes back outbound messages as webhook events that look like
+        // inbound messages. Check ALL conversations for this contact for a
+        // recent outbound message with matching content (exact body or shared URL).
+        if (contact?.id && messageBody) {
+            const twoMinutesAgo = new Date(Date.now() - 120_000).toISOString();
 
-            if (recentMsg) {
-                // Update the existing message's external_id for future delivery report correlation
-                if (externalId) {
-                    await supabaseAdmin
-                        .from("messages")
-                        .update({ external_id: externalId })
-                        .eq("id", recentMsg.id);
+            // Get all conversation IDs for this contact
+            const { data: contactConvs } = await supabaseAdmin
+                .from("conversations")
+                .select("id")
+                .eq("contact_id", contact.id);
+            const contactConvIds = (contactConvs || []).map((c: { id: string }) => c.id);
+
+            if (contactConvIds.length > 0) {
+                // Check 1: Exact body match against recent outbound messages
+                let dupMsg: { id: string } | null = null;
+                const { data: exactMatch } = await supabaseAdmin
+                    .from("messages")
+                    .select("id")
+                    .in("conversation_id", contactConvIds)
+                    .eq("direction", "outbound")
+                    .eq("body", messageBody)
+                    .gte("created_at", twoMinutesAgo)
+                    .limit(1)
+                    .maybeSingle();
+                dupMsg = exactMatch;
+
+                // Check 2: URL-based match (for payment links where CRM stores
+                // a compact body but MSG91 echoes the full text with the same URL)
+                if (!dupMsg) {
+                    const urls = messageBody.match(/https?:\/\/[^\s]+/g) || [];
+                    for (const url of urls) {
+                        const { data: urlMatch } = await supabaseAdmin
+                            .from("messages")
+                            .select("id")
+                            .in("conversation_id", contactConvIds)
+                            .eq("direction", "outbound")
+                            .ilike("body", `%${url}%`)
+                            .gte("created_at", twoMinutesAgo)
+                            .limit(1)
+                            .maybeSingle();
+                        if (urlMatch) {
+                            dupMsg = urlMatch;
+                            break;
+                        }
+                    }
                 }
-                console.log(`[MSG91 Webhook] Skipping duplicate outbound message for conversation ${conversation.id}`);
-                return NextResponse.json({ success: true, type: "duplicate_skipped" });
+
+                if (dupMsg) {
+                    // Update the existing message's external_id for delivery report correlation
+                    if (externalId) {
+                        await supabaseAdmin
+                            .from("messages")
+                            .update({ external_id: externalId })
+                            .eq("id", dupMsg.id);
+                    }
+                    console.log(`[MSG91 Webhook] Skipping duplicate message for contact ${contact.id} (matched msg ${dupMsg.id})`);
+                    return NextResponse.json({ success: true, type: "duplicate_skipped" });
+                }
             }
         }
 
