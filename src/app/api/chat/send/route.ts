@@ -240,6 +240,15 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    // Extract provider message ID for delivery report correlation
+    const metaMessageId = provider === "meta" && (finalResponse as any)?.messages?.[0]?.id
+        ? (finalResponse as any).messages[0].id
+        : undefined;
+    const msg91RequestId = provider !== "meta" && typeof finalResponse === "object" && finalResponse !== null
+        ? ((finalResponse as any).data?.requestId || (finalResponse as any).requestId || (finalResponse as any).data?.request_id)
+        : undefined;
+    const providerMessageId = metaMessageId || msg91RequestId || undefined;
+
     // ─── Persist message in Supabase ─────────────────────────
     const { data: message, error: msgError } = await supabaseAdmin
         .from("messages")
@@ -253,9 +262,8 @@ export async function POST(request: NextRequest) {
             status: finalStatus,
             is_internal_note: false,
             integrated_number: sendFromNumber,
-            request_id: provider === "meta" && (finalResponse as any)?.messages?.[0]?.id
-                ? (finalResponse as any).messages[0].id
-                : undefined,
+            request_id: providerMessageId,
+            external_id: providerMessageId,
         })
         .select()
         .single();

@@ -179,10 +179,16 @@ export async function POST(request: NextRequest) {
     // ─── Optionally send payment link via WhatsApp ───────────
     if (sendViaWhatsApp && shortUrl && conversationId) {
         const msgAuthKey = process.env.MSG91_AUTH_KEY;
+        const sendFromNumber = integratedNumber || process.env.MSG91_INTEGRATED_NUMBER || "919999999999";
+        const cleanPhone = phone.replace(/^\+/, "");
+        const messageText = `💰 Payment Link\n\nAmount: ₹${amount.toLocaleString("en-IN")}\n${description ? `For: ${description}\n` : ""}\nPay here: ${shortUrl}`;
+
+        let sendStatus: "sent" | "failed" = "failed";
+        let providerMessageId: string | undefined;
+
         if (msgAuthKey) {
             try {
-                const cleanPhone = phone.replace(/^\+/, "");
-                await fetch(
+                const response = await fetch(
                     "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/",
                     {
                         method: "POST",
@@ -191,47 +197,64 @@ export async function POST(request: NextRequest) {
                             "Content-Type": "application/json",
                         },
                         body: JSON.stringify({
-                            integrated_number: integratedNumber || "919999999999",
+                            integrated_number: sendFromNumber,
                             content_type: "text",
                             payload: {
                                 to: cleanPhone,
                                 type: "text",
-                                text: {
-                                    body: `💰 Payment Link\n\nAmount: ₹${amount.toLocaleString("en-IN")}\n${description ? `For: ${description}\n` : ""}\nPay here: ${shortUrl}`,
-                                },
+                                text: { body: messageText },
                             },
                         }),
                     }
                 );
 
-                // Persist the payment link message
-                await supabaseAdmin.from("messages").insert({
-                    conversation_id: conversationId,
-                    direction: "outbound",
-                    content_type: "text",
-                    body: `💰 Payment Link — ₹${amount.toLocaleString("en-IN")}${description ? ` (${description})` : ""}\n${shortUrl}`,
-                    status: "sent",
-                    is_internal_note: false,
-                });
+                const responseText = await response.text();
+                let responseData: any;
+                try { responseData = JSON.parse(responseText); } catch { responseData = responseText; }
 
-                // Update conversation last message
-                await supabaseAdmin
-                    .from("conversations")
-                    .update({
-                        last_message: `💰 Payment: ₹${amount.toLocaleString("en-IN")}`,
-                        last_message_time: new Date().toISOString(),
-                    })
-                    .eq("id", conversationId);
-
-                // Update payment message status
-                await supabaseAdmin
-                    .from("payments")
-                    .update({ message_status: "sent" })
-                    .eq("id", payment.id);
+                if (!response.ok) {
+                    console.error("[Payment WA Send] MSG91 error:", response.status, responseText);
+                } else {
+                    console.log("[Payment WA Send] MSG91 success:", responseText);
+                    sendStatus = "sent";
+                    providerMessageId = responseData?.data?.requestId
+                        || responseData?.requestId
+                        || responseData?.data?.request_id;
+                }
             } catch (err) {
-                console.error("WA payment send error:", err);
+                console.error("[Payment WA Send] Network error:", err);
             }
+        } else {
+            console.error("[Payment WA Send] MSG91_AUTH_KEY not configured");
         }
+
+        // Persist the payment link message
+        await supabaseAdmin.from("messages").insert({
+            conversation_id: conversationId,
+            direction: "outbound",
+            content_type: "text",
+            body: `💰 Payment Link — ₹${amount.toLocaleString("en-IN")}${description ? ` (${description})` : ""}\n${shortUrl}`,
+            status: sendStatus,
+            is_internal_note: false,
+            integrated_number: sendFromNumber,
+            external_id: providerMessageId || null,
+            request_id: providerMessageId || null,
+        });
+
+        // Update conversation last message
+        await supabaseAdmin
+            .from("conversations")
+            .update({
+                last_message: `💰 Payment: ₹${amount.toLocaleString("en-IN")}`,
+                last_message_time: new Date().toISOString(),
+            })
+            .eq("id", conversationId);
+
+        // Update payment message status
+        await supabaseAdmin
+            .from("payments")
+            .update({ message_status: sendStatus })
+            .eq("id", payment.id);
     }
 
     return NextResponse.json(mapPayment(payment), { status: 201 });

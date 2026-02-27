@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import crypto from 'crypto';
+import { isPlaceholderName } from "@/lib/utils";
 
 // ─── GET /api/webhooks/meta ─────────────────────────────────
 // Handles webhook verification from Meta Developer Portal
@@ -105,6 +106,23 @@ export async function POST(request: NextRequest) {
 
             if (existingContact) {
                 contactId = existingContact.id;
+
+                // Update contact name if we have a better one from Meta profile
+                if (senderName && senderName !== "Unknown") {
+                    const { data: contactRow } = await supabaseAdmin
+                        .from("contacts")
+                        .select("name")
+                        .eq("id", contactId)
+                        .single();
+
+                    if (contactRow && isPlaceholderName(contactRow.name)) {
+                        await supabaseAdmin
+                            .from("contacts")
+                            .update({ name: senderName })
+                            .eq("id", contactId);
+                        console.log(`[Meta Webhook] Updated contact name to "${senderName}"`);
+                    }
+                }
             } else {
                 const { data: newContact, error: contactError } = await supabaseAdmin
                     .from("contacts")
@@ -130,15 +148,28 @@ export async function POST(request: NextRequest) {
 
             if (existingConv) {
                 conversationId = existingConv.id;
-                // Update last_message
+                // Update last_message and unread count
                 await supabaseAdmin
                     .from("conversations")
                     .update({
                         last_message: messageBody,
-                        last_message_at: timestamp,
-                        updated_at: timestamp
+                        last_message_time: timestamp,
+                        last_incoming_timestamp: timestamp,
                     })
                     .eq("id", conversationId);
+
+                // Increment unread count
+                const { data: convData } = await supabaseAdmin
+                    .from("conversations")
+                    .select("unread_count")
+                    .eq("id", conversationId)
+                    .single();
+                if (convData) {
+                    await supabaseAdmin
+                        .from("conversations")
+                        .update({ unread_count: (convData.unread_count || 0) + 1 })
+                        .eq("id", conversationId);
+                }
             } else {
                 const { data: newConv, error: convError } = await supabaseAdmin
                     .from("conversations")
@@ -147,7 +178,9 @@ export async function POST(request: NextRequest) {
                         integrated_number: integratedNumberDisplay || integratedNumberId,
                         status: "open",
                         last_message: messageBody,
-                        last_message_at: timestamp
+                        last_message_time: timestamp,
+                        last_incoming_timestamp: timestamp,
+                        unread_count: 1,
                     })
                     .select("id")
                     .single();

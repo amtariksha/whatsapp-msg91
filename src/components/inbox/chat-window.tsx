@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
+import { cn, getContactDisplayName, getContactInitials } from "@/lib/utils";
 import {
     useConversation,
     useUpdateConversationStatus,
@@ -262,12 +262,8 @@ export function ChatWindow({ className }: { className?: string }) {
         );
     }
 
-    const initials = conversation.contact.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
+    const displayName = getContactDisplayName(conversation.contact);
+    const initials = getContactInitials(conversation.contact);
 
     const isAssignedToMe = conversation.assignedTo === currentUser?.id;
     const isAdmin = currentUser?.role === "admin";
@@ -310,7 +306,7 @@ export function ChatWindow({ className }: { className?: string }) {
                         </Avatar>
                         <div className="flex flex-col items-start bg-transparent min-w-0">
                             <span className="text-sm font-semibold text-slate-900 truncate w-full">
-                                {conversation.contact.name}
+                                {displayName}
                             </span>
                             <div className="flex items-center gap-1.5 w-full">
                                 <span className="text-xs text-slate-500 truncate">

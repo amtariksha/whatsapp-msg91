@@ -79,3 +79,35 @@ export function truncate(text: string, maxLength: number = 40): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + "…";
 }
+
+/**
+ * Check if a contact name is a placeholder (phone number, "Unknown", empty).
+ */
+export function isPlaceholderName(name: string | null | undefined): boolean {
+  if (!name || name.trim() === "") return true;
+  if (name === "Unknown" || name === "unknown") return true;
+  const cleaned = name.replace(/[\s+\-()]/g, "");
+  return /^\d{7,15}$/.test(cleaned);
+}
+
+/**
+ * Get a display-friendly contact name, falling back to formatted phone.
+ */
+export function getContactDisplayName(contact: { name: string; phone: string }): string {
+  return isPlaceholderName(contact.name) ? `+${contact.phone}` : contact.name;
+}
+
+/**
+ * Get initials for a contact avatar.
+ */
+export function getContactInitials(contact: { name: string; phone: string }): string {
+  if (isPlaceholderName(contact.name)) {
+    return contact.phone.slice(-2);
+  }
+  return contact.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}

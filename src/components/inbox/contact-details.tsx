@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
+import { cn, getContactDisplayName, getContactInitials } from "@/lib/utils";
 import { useConversation, useUpdateContactTags, useUpdateContact } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 
@@ -34,12 +34,8 @@ export function ContactDetails({ className }: { className?: string }) {
     if (!contactPanelOpen || !conversation) return null;
 
     const contact = conversation.contact;
-    const initials = contact.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
+    const displayName = getContactDisplayName(contact);
+    const initials = getContactInitials(contact);
 
     // ─── Tags Handlers ─────────────────────────────────────
     const handleAddTag = () => {
@@ -142,7 +138,7 @@ export function ContactDetails({ className }: { className?: string }) {
                 ) : (
                     <div className="flex items-center gap-2 group relative">
                         <h4 className="text-base font-semibold text-slate-900 text-center">
-                            {contact.name}
+                            {displayName}
                         </h4>
                         <Button
                             size="icon"
