@@ -297,12 +297,16 @@ export async function getPayments(params?: {
     status?: string;
     from?: string;
     to?: string;
-}): Promise<{ payments: Payment[]; summary: PaymentSummary }> {
+    page?: number;
+    limit?: number;
+}): Promise<{ payments: Payment[]; total: number; page: number; limit: number; summary: PaymentSummary }> {
     const searchParams = new URLSearchParams();
     if (params?.status && params.status !== "all")
         searchParams.set("status", params.status);
     if (params?.from) searchParams.set("from", params.from);
     if (params?.to) searchParams.set("to", params.to);
+    searchParams.set("page", String(params?.page || 1));
+    searchParams.set("limit", String(params?.limit || 20));
     const res = await fetch(
         `${BASE_URL}/api/payments?${searchParams.toString()}`
     );

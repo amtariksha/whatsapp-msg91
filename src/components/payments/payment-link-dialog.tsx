@@ -69,7 +69,7 @@ export function PaymentLinkDialog({
                 contactId: contactId || undefined,
                 conversationId: conversationId || undefined,
                 integratedNumber: activeNumber?.number || undefined,
-                sendViaWhatsApp: sendViaWA && !!conversationId,
+                sendViaWhatsApp: sendViaWA,
             },
             {
                 onSuccess: () => {
@@ -150,24 +150,22 @@ export function PaymentLinkDialog({
                         />
                     </div>
 
-                    {conversationId && (
-                        <label className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-100 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={sendViaWA}
-                                onChange={(e) => setSendViaWA(e.target.checked)}
-                                className="w-4 h-4 accent-emerald-500"
-                            />
-                            <div>
-                                <p className="text-sm font-medium text-emerald-800">
-                                    Send via WhatsApp
-                                </p>
-                                <p className="text-xs text-emerald-600">
-                                    Payment link will be sent as a message
-                                </p>
-                            </div>
-                        </label>
-                    )}
+                    <label className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-100 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={sendViaWA}
+                            onChange={(e) => setSendViaWA(e.target.checked)}
+                            className="w-4 h-4 accent-emerald-500"
+                        />
+                        <div>
+                            <p className="text-sm font-medium text-emerald-800">
+                                Send via WhatsApp
+                            </p>
+                            <p className="text-xs text-emerald-600">
+                                Payment link will be sent as a message{!conversationId ? " (uses template if session expired)" : ""}
+                            </p>
+                        </div>
+                    </label>
 
                     <Button
                         onClick={handleSubmit}

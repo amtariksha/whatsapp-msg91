@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     IndianRupee,
     Plus,
@@ -13,11 +13,12 @@ import {
     MoreHorizontal,
     ExternalLink,
     RefreshCw,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { usePayments, useUpdatePayment, useSyncPayment } from "@/lib/hooks";
 import { PaymentLinkDialog } from "@/components/payments/payment-link-dialog";
@@ -70,17 +71,28 @@ function formatCurrency(amount: number) {
 
 export default function PaymentsPage() {
     const [statusFilter, setStatusFilter] = useState("all");
+    const [page, setPage] = useState(1);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [markPaidId, setMarkPaidId] = useState<string | null>(null);
     const [transactionRef, setTransactionRef] = useState("");
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
-    const { data, isLoading } = usePayments({ status: statusFilter });
+    const { data, isLoading } = usePayments({ status: statusFilter, page });
     const { mutate: updatePayment, isPending: isUpdating } = useUpdatePayment();
     const { mutate: syncPayment, isPending: isSyncing } = useSyncPayment();
 
+    // Reset to page 1 when filter changes
+    useEffect(() => {
+        setPage(1);
+    }, [statusFilter]);
+
     const payments = data?.payments || [];
+    const total = data?.total || 0;
+    const limit = data?.limit || 20;
+    const totalPages = Math.ceil(total / limit);
+    const showingFrom = total === 0 ? 0 : (page - 1) * limit + 1;
+    const showingTo = Math.min(page * limit, total);
     const summary = data?.summary || {
         created: { count: 0, total: 0 },
         paid: { count: 0, total: 0 },
@@ -244,8 +256,8 @@ export default function PaymentsPage() {
                         <div className="col-span-1">Actions</div>
                     </div>
 
-                    <ScrollArea className="max-h-[calc(100vh-380px)]">
-                        {isLoading ? (
+                    <div className="min-h-[400px]">
+                        {isLoading && !payments.length ? (
                             <div className="flex items-center justify-center py-12">
                                 <div className="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full" />
                             </div>
@@ -469,7 +481,41 @@ export default function PaymentsPage() {
                                 })}
                             </div>
                         )}
-                    </ScrollArea>
+                    </div>
+
+                    {/* Pagination */}
+                    {total > 0 && (
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/30">
+                            <p className="text-sm text-slate-500">
+                                Showing {showingFrom}–{showingTo} of {total}
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    disabled={page <= 1}
+                                    className="h-8 px-3 text-xs"
+                                >
+                                    <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                                    Previous
+                                </Button>
+                                <span className="text-sm text-slate-600 tabular-nums">
+                                    Page {page} of {totalPages}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={page >= totalPages}
+                                    className="h-8 px-3 text-xs"
+                                >
+                                    Next
+                                    <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

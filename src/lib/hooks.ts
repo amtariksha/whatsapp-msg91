@@ -313,10 +313,13 @@ export function usePayments(params?: {
     status?: string;
     from?: string;
     to?: string;
+    page?: number;
+    limit?: number;
 }) {
     return useQuery({
         queryKey: ["payments", params],
         queryFn: () => api.getPayments(params),
+        placeholderData: (prev) => prev,
         refetchInterval: 15000,
     });
 }
