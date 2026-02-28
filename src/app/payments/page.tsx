@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { usePayments, useUpdatePayment, useSyncPayment } from "@/lib/hooks";
+import { usePayments, useUpdatePayment, useSyncPayment, useSettings } from "@/lib/hooks";
 import { PaymentLinkDialog } from "@/components/payments/payment-link-dialog";
 import { formatDistanceToNow } from "date-fns";
 import type { Payment } from "@/lib/types";
@@ -78,7 +78,9 @@ export default function PaymentsPage() {
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
-    const { data, isLoading } = usePayments({ status: statusFilter, page });
+    const { data: settings } = useSettings();
+    const pageSize = parseInt(settings?.payments_page_size || "20") || 20;
+    const { data, isLoading } = usePayments({ status: statusFilter, page, limit: pageSize });
     const { mutate: updatePayment, isPending: isUpdating } = useUpdatePayment();
     const { mutate: syncPayment, isPending: isSyncing } = useSyncPayment();
 

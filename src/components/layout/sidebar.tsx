@@ -15,6 +15,7 @@ import {
     Settings,
     FileText,
     LogOut,
+    Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -34,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/components/auth-provider";
+import { useBalance } from "@/lib/hooks";
 import { ReminderPopover } from "./reminder-popover";
 
 const navItems = [
@@ -55,9 +57,12 @@ export function Sidebar() {
         setActiveNumber,
     } = useAppStore();
 
+    const isAdmin = user?.role === "admin";
+    const { data: balanceData } = useBalance();
+
     const allNavItems = [
         ...navItems,
-        ...(user?.role === "admin"
+        ...(isAdmin
             ? [
                 { href: "/templates", label: "Templates", icon: FileText },
                 { href: "/settings", label: "Settings", icon: Settings },
@@ -125,6 +130,39 @@ export function Sidebar() {
                                 {activeNumber
                                     ? `${activeNumber.label} (+${activeNumber.number})`
                                     : "No number selected"}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+            )}
+
+            {/* Balance Indicator (admin only) */}
+            {isAdmin && balanceData?.balance !== null && balanceData?.balance !== undefined && (
+                <div className="px-3 py-2 border-b border-slate-100">
+                    {sidebarOpen ? (
+                        <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-emerald-50/60">
+                            <Wallet className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                            <span className="text-xs font-medium text-emerald-700 truncate">
+                                {balanceData.currency === "INR" ? "₹" : balanceData.currency + " "}
+                                {Number(balanceData.balance).toLocaleString("en-IN", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
+                            </span>
+                        </div>
+                    ) : (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center justify-center w-10 h-8 rounded-md bg-emerald-50/60 cursor-default mx-auto">
+                                    <Wallet className="w-4 h-4 text-emerald-600" />
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                Balance: {balanceData.currency === "INR" ? "₹" : balanceData.currency + " "}
+                                {Number(balanceData.balance).toLocaleString("en-IN", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
                             </TooltipContent>
                         </Tooltip>
                     )}

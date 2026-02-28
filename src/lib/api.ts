@@ -13,6 +13,7 @@ import type {
     Reminder,
     LocalTemplate,
     PaginatedContacts,
+    WhatsAppLogsResponse,
 } from "./types";
 
 const BASE_URL = "";
@@ -292,6 +293,48 @@ export async function syncTemplates(): Promise<{ synced: number }> {
     return res.json();
 }
 
+// ─── Fetch Numbers from MSG91 ──────────────────────────────
+export async function fetchMsg91Numbers(): Promise<{
+    numbers: { phone: string; name: string }[];
+    imported: number;
+    total: number;
+}> {
+    const res = await fetch(`${BASE_URL}/api/numbers/fetch-msg91`, {
+        method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to fetch numbers from MSG91");
+    return res.json();
+}
+
+// ─── MSG91 Balance ─────────────────────────────────────────
+export async function getBalance(): Promise<{
+    balance: number | null;
+    currency: string;
+}> {
+    const res = await fetch(`${BASE_URL}/api/balance`);
+    if (!res.ok) throw new Error("Failed to check balance");
+    return res.json();
+}
+
+// ─── App Settings ─────────────────────────────────────────
+export async function getSettings(): Promise<Record<string, string>> {
+    const res = await fetch(`${BASE_URL}/api/settings`);
+    if (!res.ok) throw new Error("Failed to fetch settings");
+    return res.json();
+}
+
+export async function updateSettings(
+    settings: Record<string, string>
+): Promise<Record<string, string>> {
+    const res = await fetch(`${BASE_URL}/api/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+    });
+    if (!res.ok) throw new Error("Failed to update settings");
+    return res.json();
+}
+
 // ─── Payments ──────────────────────────────────────────────
 export async function getPayments(params?: {
     status?: string;
@@ -344,5 +387,60 @@ export async function syncPayment(id: string): Promise<{ success: boolean; statu
         method: "POST",
     });
     if (!res.ok) throw new Error("Failed to sync payment");
+    return res.json();
+}
+
+// ─── WhatsApp Logs ─────────────────────────────────────────
+export async function getLogs(params?: {
+    from?: string;
+    to?: string;
+    phone?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+}): Promise<WhatsAppLogsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.from) searchParams.set("from", params.from);
+    if (params?.to) searchParams.set("to", params.to);
+    if (params?.phone) searchParams.set("phone", params.phone);
+    if (params?.status && params.status !== "all") searchParams.set("status", params.status);
+    searchParams.set("page", String(params?.page || 1));
+    searchParams.set("limit", String(params?.limit || 25));
+    const res = await fetch(`${BASE_URL}/api/logs?${searchParams.toString()}`);
+    if (!res.ok) throw new Error("Failed to fetch logs");
+    return res.json();
+}
+
+// ─── Voice Call ────────────────────────────────────────────
+export async function initiateVoiceCall(
+    phone: string,
+    integratedNumber: string,
+    conversationId: string
+): Promise<{ success: boolean; callData?: unknown }> {
+    const res = await fetch(`${BASE_URL}/api/chat/call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, integratedNumber, conversationId }),
+    });
+    if (!res.ok) throw new Error("Failed to initiate voice call");
+    return res.json();
+}
+
+// ─── WA Native Payment ────────────────────────────────────
+export async function sendWaPayment(payload: {
+    phone: string;
+    integratedNumber: string;
+    conversationId: string;
+    bodyText: string;
+    footerText?: string;
+    headerImageUrl?: string;
+    items: { name: string; amount: number; quantity: number }[];
+}): Promise<{ success: boolean }> {
+    const res = await fetch(`${BASE_URL}/api/chat/wa-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to send WA payment");
     return res.json();
 }

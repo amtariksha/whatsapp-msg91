@@ -16,6 +16,7 @@ import {
     Clipboard,
     Trash2,
     Send,
+    CloudUpload,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ interface LocalTemplate {
     headerType?: string;
     headerContent?: string;
     footer?: string;
+    msg91TemplateId?: string;
     createdAt: string;
 }
 
@@ -163,14 +165,34 @@ export default function TemplatesPage() {
         fetchLocalTemplates();
     }, []);
 
-    const handleSave = async (data: { name: string; category: string; language: string; body: string; footer: string }) => {
-        const url = editTemplate ? `/api/templates/local/${editTemplate.id}` : "/api/templates/local";
-        const method = editTemplate ? "PATCH" : "POST";
-        await fetch(url, {
-            method,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
-        });
+    const handleSave = async (data: { name: string; category: string; language: string; body: string; footer: string; headerType?: string; headerContent?: string; buttons?: unknown[] }) => {
+        if (editTemplate?.msg91TemplateId) {
+            // Edit on MSG91 — use the remote edit route
+            const res = await fetch(`/api/templates/local/${editTemplate.id}/edit-remote`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                alert(`MSG91 edit failed: ${result.error || "Unknown error"}`);
+                return;
+            }
+        } else if (editTemplate) {
+            // Local-only edit
+            await fetch(`/api/templates/local/${editTemplate.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
+        } else {
+            // Create new
+            await fetch("/api/templates/local", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
+        }
         setEditTemplate(null);
         fetchLocalTemplates();
     };
@@ -200,10 +222,21 @@ export default function TemplatesPage() {
         fetchLocalTemplates();
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Delete this template?")) return;
-        await fetch(`/api/templates/local/${id}`, { method: "DELETE" });
+    const handleDelete = async (t: LocalTemplate) => {
+        if (t.msg91TemplateId) {
+            if (!confirm("Delete this template? This will also remove it from MSG91.")) return;
+            await fetch(`/api/templates/local/${t.id}/delete-remote`, { method: "DELETE" });
+        } else {
+            if (!confirm("Delete this template?")) return;
+            await fetch(`/api/templates/local/${t.id}`, { method: "DELETE" });
+        }
         fetchLocalTemplates();
+    };
+
+    const handleEditRemote = async (t: LocalTemplate) => {
+        // Opens the form dialog in edit mode — on save, sends to MSG91
+        setEditTemplate(t);
+        setFormOpen(true);
     };
 
     const handleCopyId = (id: string) => {
@@ -347,6 +380,12 @@ export default function TemplatesPage() {
                                                     <Pencil className="w-4 h-4 mr-2" />
                                                     Edit
                                                 </DropdownMenuItem>
+                                                {t.msg91TemplateId && (
+                                                    <DropdownMenuItem onClick={() => handleEditRemote(t)}>
+                                                        <CloudUpload className="w-4 h-4 mr-2" />
+                                                        Edit on MSG91
+                                                    </DropdownMenuItem>
+                                                )}
                                                 <DropdownMenuItem onClick={() => handleDuplicate(t)}>
                                                     <Copy className="w-4 h-4 mr-2" />
                                                     Duplicate
@@ -370,11 +409,11 @@ export default function TemplatesPage() {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem
-                                                    onClick={() => handleDelete(t.id)}
+                                                    onClick={() => handleDelete(t)}
                                                     className="text-red-600 focus:text-red-600"
                                                 >
                                                     <Trash2 className="w-4 h-4 mr-2" />
-                                                    Delete
+                                                    {t.msg91TemplateId ? "Delete (MSG91 + Local)" : "Delete"}
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>

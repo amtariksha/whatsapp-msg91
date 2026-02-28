@@ -12,8 +12,14 @@ import {
     KeyRound,
     Zap,
     Pencil,
+    SlidersHorizontal,
+    Check,
+    Download,
+    Wallet,
+    RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useSettings, useUpdateSettings, useFetchMsg91Numbers, useBalance } from "@/lib/hooks";
 
 interface UserRecord {
     id: string;
@@ -39,7 +45,7 @@ export default function SettingsPage() {
     const [error, setError] = useState("");
 
     // ─── Settings tab ───────────────────────────────────────
-    const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers">("users");
+    const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers" | "general">("users");
 
     // ─── Reset password dialog ─────────────────────────────
     const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -193,6 +199,16 @@ export default function SettingsPage() {
                 >
                     <User className="w-4 h-4 inline mr-2" />
                     WhatsApp Numbers
+                </button>
+                <button
+                    onClick={() => setActiveTab("general")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "general"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                        }`}
+                >
+                    <SlidersHorizontal className="w-4 h-4 inline mr-2" />
+                    General
                 </button>
             </div>
 
@@ -483,6 +499,215 @@ export default function SettingsPage() {
             {activeTab === "numbers" && (
                 <NumbersTab />
             )}
+
+            {activeTab === "general" && (
+                <GeneralSettingsTab />
+            )}
+        </div>
+    );
+}
+
+// ─── General Settings Tab ─────────────────────────────────
+function GeneralSettingsTab() {
+    const { data: settings, isLoading } = useSettings();
+    const { mutate: updateSettings, isPending: saving } = useUpdateSettings();
+
+    const [paymentTemplateName, setPaymentTemplateName] = useState("");
+    const [catalogId, setCatalogId] = useState("");
+    const [contactsPageSize, setContactsPageSize] = useState("25");
+    const [paymentsPageSize, setPaymentsPageSize] = useState("20");
+    const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        if (settings) {
+            setPaymentTemplateName(settings.payment_template_name || "");
+            setCatalogId(settings.whatsapp_catalog_id || "");
+            setContactsPageSize(settings.contacts_page_size || "25");
+            setPaymentsPageSize(settings.payments_page_size || "20");
+        }
+    }, [settings]);
+
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaved(false);
+        updateSettings(
+            {
+                payment_template_name: paymentTemplateName,
+                whatsapp_catalog_id: catalogId,
+                contacts_page_size: String(Math.min(100, Math.max(5, parseInt(contactsPageSize) || 25))),
+                payments_page_size: String(Math.min(100, Math.max(5, parseInt(paymentsPageSize) || 20))),
+            },
+            {
+                onSuccess: () => {
+                    setSaved(true);
+                    setTimeout(() => setSaved(false), 3000);
+                },
+            }
+        );
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            {/* MSG91 Balance Card */}
+            <BalanceCard />
+
+            <form onSubmit={handleSave}>
+                <p className="text-sm text-slate-500 mb-6">
+                    Configure application-wide settings. These values are stored in the database and apply to all users.
+                </p>
+
+                <div className="space-y-6">
+                    {/* WhatsApp Settings */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+                        WhatsApp Settings
+                    </h3>
+                    <div className="space-y-5">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Payment Template Name
+                            </label>
+                            <input
+                                type="text"
+                                value={paymentTemplateName}
+                                onChange={(e) => setPaymentTemplateName(e.target.value)}
+                                placeholder="e.g. payment_link_v1"
+                                className="w-full max-w-md px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                The MSG91-approved template name for sending payment links when the 24h session window has expired.
+                                Template should have variables: {"{{1}}"} = amount, {"{{2}}"} = description, {"{{3}}"} = payment link.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                WhatsApp Catalog ID
+                            </label>
+                            <input
+                                type="text"
+                                value={catalogId}
+                                onChange={(e) => setCatalogId(e.target.value)}
+                                placeholder="e.g. 123456789012345"
+                                className="w-full max-w-md px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                Your Facebook/Meta Commerce catalog ID for sending product messages.
+                                This will be pre-filled in the product catalog dialog.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Pagination Settings */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+                        Pagination
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Contacts Per Page
+                            </label>
+                            <input
+                                type="number"
+                                min="5"
+                                max="100"
+                                value={contactsPageSize}
+                                onChange={(e) => setContactsPageSize(e.target.value)}
+                                className="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">5 – 100 items per page</p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Payments Per Page
+                            </label>
+                            <input
+                                type="number"
+                                min="5"
+                                max="100"
+                                value={paymentsPageSize}
+                                onChange={(e) => setPaymentsPageSize(e.target.value)}
+                                className="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">5 – 100 items per page</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-3 mt-6">
+                <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                    {saving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <Check className="w-4 h-4" />
+                    )}
+                    {saving ? "Saving..." : "Save Settings"}
+                </button>
+                {saved && (
+                    <span className="text-sm text-emerald-600 font-medium animate-in fade-in">
+                        Settings saved successfully
+                    </span>
+                )}
+            </div>
+        </form>
+        </div>
+    );
+}
+
+// ─── Balance Card ─────────────────────────────────────────
+function BalanceCard() {
+    const { data, isLoading, refetch, isRefetching } = useBalance();
+
+    return (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white">
+                        <Wallet className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold text-slate-800">MSG91 Balance</h3>
+                        {isLoading ? (
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                                <span className="text-xs text-slate-400">Loading...</span>
+                            </div>
+                        ) : data?.balance !== null && data?.balance !== undefined ? (
+                            <p className="text-xl font-bold text-slate-900 mt-0.5">
+                                {data.currency === "INR" ? "₹" : data.currency + " "}
+                                {Number(data.balance).toLocaleString("en-IN", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
+                            </p>
+                        ) : (
+                            <p className="text-sm text-slate-400 mt-0.5">Unable to fetch balance</p>
+                        )}
+                    </div>
+                </div>
+                <button
+                    onClick={() => refetch()}
+                    disabled={isRefetching}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                    title="Refresh balance"
+                >
+                    <RefreshCw className={`w-4 h-4 ${isRefetching ? "animate-spin" : ""}`} />
+                </button>
+            </div>
         </div>
     );
 }
@@ -679,6 +904,7 @@ function NumbersTab() {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
+    const [autoDetectResult, setAutoDetectResult] = useState<string | null>(null);
 
     // Form fields
     const [number, setNumber] = useState("");
@@ -688,6 +914,8 @@ function NumbersTab() {
     const [metaPhoneNumberId, setMetaPhoneNumberId] = useState("");
     const [metaAccessToken, setMetaAccessToken] = useState("");
     const [saving, setSaving] = useState(false);
+
+    const fetchMsg91 = useFetchMsg91Numbers();
 
     const fetchNumbers = async () => {
         try {
@@ -761,14 +989,53 @@ function NumbersTab() {
         <div>
             <div className="flex justify-between mb-4 items-end">
                 <p className="text-sm text-slate-500">Configure your integrated WhatsApp numbers and providers.</p>
-                <button
-                    onClick={() => { resetForm(); setShowForm(true); }}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors shadow-sm"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Number
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => {
+                            setAutoDetectResult(null);
+                            fetchMsg91.mutate(undefined, {
+                                onSuccess: (data) => {
+                                    setAutoDetectResult(
+                                        `Found ${data.total} number${data.total !== 1 ? "s" : ""}, imported ${data.imported} new`
+                                    );
+                                    fetchNumbers();
+                                    setTimeout(() => setAutoDetectResult(null), 5000);
+                                },
+                                onError: () => {
+                                    setAutoDetectResult("Failed to fetch numbers from MSG91");
+                                    setTimeout(() => setAutoDetectResult(null), 5000);
+                                },
+                            });
+                        }}
+                        disabled={fetchMsg91.isPending}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg font-medium text-sm hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+                    >
+                        {fetchMsg91.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4" />
+                        )}
+                        Auto-detect from MSG91
+                    </button>
+                    <button
+                        onClick={() => { resetForm(); setShowForm(true); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Number
+                    </button>
+                </div>
             </div>
+
+            {autoDetectResult && (
+                <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
+                    autoDetectResult.includes("Failed")
+                        ? "bg-red-50 text-red-700 border border-red-200"
+                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}>
+                    {autoDetectResult}
+                </div>
+            )}
 
             {showForm && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">

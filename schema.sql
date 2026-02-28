@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id    UUID REFERENCES conversations(id) ON DELETE CASCADE,
     direction          TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
     content_type       TEXT NOT NULL DEFAULT 'text'
-        CHECK (content_type IN ('text', 'image', 'video', 'document', 'audio', 'template', 'payment_link')),
+        CHECK (content_type IN ('text', 'image', 'video', 'document', 'audio', 'template', 'payment_link', 'interactive', 'location', 'contact', 'voice_call')),
     body               TEXT,
     media_url          TEXT,
     template_name      TEXT,
@@ -126,6 +126,21 @@ CREATE TABLE IF NOT EXISTS templates_local (
     updated_at        TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── App Settings (key-value config) ─────────────────────────
+CREATE TABLE IF NOT EXISTS app_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed default settings (idempotent)
+INSERT INTO app_settings (key, value) VALUES
+    ('payment_template_name', ''),
+    ('contacts_page_size', '25'),
+    ('payments_page_size', '20'),
+    ('whatsapp_catalog_id', '')
+ON CONFLICT (key) DO NOTHING;
+
 -- ─── Integrated Numbers ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS integrated_numbers (
     id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -171,6 +186,7 @@ ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quick_replies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE templates_local ENABLE ROW LEVEL SECURITY;
 ALTER TABLE integrated_numbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 
 -- Service role policies (full access for server-side)
 -- Drop first to avoid "already exists" errors on re-run
@@ -184,6 +200,7 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Service role full access" ON quick_replies;
     DROP POLICY IF EXISTS "Service role full access" ON templates_local;
     DROP POLICY IF EXISTS "Service role full access" ON integrated_numbers;
+    DROP POLICY IF EXISTS "Service role full access" ON app_settings;
 END $$;
 
 CREATE POLICY "Service role full access" ON users FOR ALL USING (true);
@@ -195,3 +212,4 @@ CREATE POLICY "Service role full access" ON reminders FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON quick_replies FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON templates_local FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON integrated_numbers FOR ALL USING (true);
+CREATE POLICY "Service role full access" ON app_settings FOR ALL USING (true);

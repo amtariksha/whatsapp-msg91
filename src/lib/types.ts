@@ -258,6 +258,27 @@ export interface LocalTemplate {
   updatedAt: string;
 }
 
+// ─── WhatsApp Log ─────────────────────────────────────────
+export interface WhatsAppLog {
+  id: string;
+  phone: string;
+  direction: string;
+  status: string;
+  contentType: string;
+  templateName?: string;
+  sentAt: string;
+  deliveredAt?: string;
+  readAt?: string;
+  credits?: number;
+}
+
+export interface WhatsAppLogsResponse {
+  logs: WhatsAppLog[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 // ─── User (for assignment dropdowns etc.) ──────────────────
 export interface AppUser {
   id: string;

@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useContacts } from "@/lib/hooks";
+import { useContacts, useSettings } from "@/lib/hooks";
 
 export default function ContactsPage() {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
-    const { data, isLoading } = useContacts(search, page);
+    const { data: settings } = useSettings();
+    const pageSize = parseInt(settings?.contacts_page_size || "25") || 25;
+    const { data, isLoading } = useContacts(search, page, pageSize);
 
     const contacts = data?.contacts || [];
     const total = data?.total || 0;

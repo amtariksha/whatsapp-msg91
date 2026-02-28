@@ -12,6 +12,9 @@ import {
     Image as ImageIcon,
     MessageSquareText,
     IndianRupee,
+    LayoutList,
+    ShoppingBag,
+    CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +24,12 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn, isSessionExpired } from "@/lib/utils";
 import { useSendMessage, useQuickReplies } from "@/lib/hooks";
 import type { QuickReply } from "@/lib/types";
@@ -29,6 +38,9 @@ import { TemplatePickerDialog } from "./template-picker-dialog";
 import { InteractiveMessageDialog } from "./interactive-message-dialog";
 import { LocationMessageDialog } from "./location-message-dialog";
 import { ContactMessageDialog } from "./contact-message-dialog";
+import { ListMessageDialog } from "./list-message-dialog";
+import { CatalogMessageDialog } from "./catalog-message-dialog";
+import { WaPaymentDialog } from "./wa-payment-dialog";
 import { PaymentLinkDialog } from "../payments/payment-link-dialog";
 import { getContactDisplayName } from "@/lib/utils";
 import type { Conversation } from "@/lib/types";
@@ -45,6 +57,9 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
     const [locationDialogOpen, setLocationDialogOpen] = useState(false);
     const [contactDialogOpen, setContactDialogOpen] = useState(false);
     const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+    const [listDialogOpen, setListDialogOpen] = useState(false);
+    const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
+    const [waPaymentDialogOpen, setWaPaymentDialogOpen] = useState(false);
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [attachedFile, setAttachedFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -351,6 +366,40 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
+                                        onClick={() => setListDialogOpen(true)}
+                                        className="h-9 w-9 text-slate-400 hover:text-indigo-500"
+                                    >
+                                        <LayoutList className="w-4.5 h-4.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Send List Message</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {!sessionExpired && !isInternalNote && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setCatalogDialogOpen(true)}
+                                        className="h-9 w-9 text-slate-400 hover:text-emerald-500"
+                                    >
+                                        <ShoppingBag className="w-4.5 h-4.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Send Product Catalog</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {!sessionExpired && !isInternalNote && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
                                         onClick={() => setLocationDialogOpen(true)}
                                         className="h-9 w-9 text-slate-400 hover:text-indigo-500"
                                     >
@@ -379,20 +428,35 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                         )}
 
                         {!isInternalNote && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => setPaymentDialogOpen(true)}
-                                        className="h-9 w-9 text-slate-400 hover:text-emerald-600"
-                                    >
-                                        <IndianRupee className="w-4.5 h-4.5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Send Payment Link</TooltipContent>
-                            </Tooltip>
+                            <DropdownMenu>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9 text-slate-400 hover:text-emerald-600"
+                                            >
+                                                <IndianRupee className="w-4.5 h-4.5" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Payment Options</TooltipContent>
+                                </Tooltip>
+                                <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem onClick={() => setPaymentDialogOpen(true)}>
+                                        <IndianRupee className="w-4 h-4 mr-2" />
+                                        Razorpay Link
+                                    </DropdownMenuItem>
+                                    {!sessionExpired && (
+                                        <DropdownMenuItem onClick={() => setWaPaymentDialogOpen(true)}>
+                                            <CreditCard className="w-4 h-4 mr-2" />
+                                            WA Payment
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
 
                         <Button
@@ -446,6 +510,22 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                 onSent={() => { }}
             />
 
+            {/* List Message Dialog */}
+            <ListMessageDialog
+                open={listDialogOpen}
+                onOpenChange={setListDialogOpen}
+                conversation={conversation}
+                onSent={() => { }}
+            />
+
+            {/* Catalog Message Dialog */}
+            <CatalogMessageDialog
+                open={catalogDialogOpen}
+                onOpenChange={setCatalogDialogOpen}
+                conversation={conversation}
+                onSent={() => { }}
+            />
+
             {/* Payment Link Dialog */}
             <PaymentLinkDialog
                 open={paymentDialogOpen}
@@ -454,6 +534,14 @@ export function MessageComposer({ conversation }: MessageComposerProps) {
                 contactId={conversation.contact.id}
                 contactName={getContactDisplayName(conversation.contact)}
                 phone={conversation.contact.phone}
+            />
+
+            {/* WA Payment Dialog */}
+            <WaPaymentDialog
+                open={waPaymentDialogOpen}
+                onOpenChange={setWaPaymentDialogOpen}
+                conversation={conversation}
+                onSent={() => { }}
             />
         </>
     );

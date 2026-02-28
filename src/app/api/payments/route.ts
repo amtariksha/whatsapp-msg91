@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getAppSetting } from "@/lib/settings";
 
 function mapPayment(row: Record<string, unknown>) {
     return {
@@ -238,7 +239,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const paymentTemplateName = process.env.MSG91_PAYMENT_TEMPLATE_NAME || "";
+        const paymentTemplateName = await getAppSetting("payment_template_name", process.env.MSG91_PAYMENT_TEMPLATE_NAME || "");
 
         if (msgAuthKey) {
             if (sessionActive) {

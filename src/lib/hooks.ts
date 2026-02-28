@@ -153,10 +153,10 @@ export function useUsers() {
 }
 
 // ─── Contacts ──────────────────────────────────────────────
-export function useContacts(search?: string, page = 1) {
+export function useContacts(search?: string, page = 1, limit = 25) {
     return useQuery({
-        queryKey: ["contacts", search, page],
-        queryFn: () => api.getContacts(search, page),
+        queryKey: ["contacts", search, page, limit],
+        queryFn: () => api.getContacts(search, page, limit),
         placeholderData: (prev) => prev, // keep previous data while loading next page
     });
 }
@@ -308,6 +308,47 @@ export function useSyncTemplates() {
     });
 }
 
+// ─── Fetch Numbers from MSG91 ──────────────────────────────
+export function useFetchMsg91Numbers() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: () => api.fetchMsg91Numbers(),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["numbers"] });
+        },
+    });
+}
+
+// ─── MSG91 Balance ─────────────────────────────────────────
+export function useBalance() {
+    return useQuery({
+        queryKey: ["balance"],
+        queryFn: api.getBalance,
+        staleTime: 60 * 1000, // 1 minute
+        refetchInterval: 5 * 60 * 1000, // refresh every 5 mins
+    });
+}
+
+// ─── App Settings ─────────────────────────────────────────
+export function useSettings() {
+    return useQuery({
+        queryKey: ["settings"],
+        queryFn: api.getSettings,
+        staleTime: 5 * 60 * 1000, // settings rarely change
+    });
+}
+
+export function useUpdateSettings() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (settings: Record<string, string>) =>
+            api.updateSettings(settings),
+        onSuccess: (data) => {
+            queryClient.setQueryData(["settings"], data);
+        },
+    });
+}
+
 // ─── Payments ──────────────────────────────────────────────
 export function usePayments(params?: {
     status?: string;
@@ -363,6 +404,71 @@ export function useSyncPayment() {
         mutationFn: (id: string) => api.syncPayment(id),
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ["payments"] });
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        },
+    });
+}
+
+// ─── WhatsApp Logs ─────────────────────────────────────────
+export function useLogs(params?: {
+    from?: string;
+    to?: string;
+    phone?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+}) {
+    return useQuery({
+        queryKey: ["logs", params],
+        queryFn: () => api.getLogs(params),
+        placeholderData: (prev) => prev,
+        refetchInterval: 30000,
+    });
+}
+
+// ─── Voice Call ────────────────────────────────────────────
+export function useVoiceCall() {
+    const queryClient = useQueryClient();
+    const activeConversationId = useAppStore((s) => s.activeConversationId);
+
+    return useMutation({
+        mutationFn: ({ phone, integratedNumber, conversationId }: {
+            phone: string;
+            integratedNumber: string;
+            conversationId: string;
+        }) => api.initiateVoiceCall(phone, integratedNumber, conversationId),
+        onSettled: () => {
+            if (activeConversationId) {
+                queryClient.invalidateQueries({
+                    queryKey: ["conversation", activeConversationId],
+                });
+            }
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        },
+    });
+}
+
+// ─── WA Native Payment ────────────────────────────────────
+export function useWaPayment() {
+    const queryClient = useQueryClient();
+    const activeConversationId = useAppStore((s) => s.activeConversationId);
+
+    return useMutation({
+        mutationFn: (payload: {
+            phone: string;
+            integratedNumber: string;
+            conversationId: string;
+            bodyText: string;
+            footerText?: string;
+            headerImageUrl?: string;
+            items: { name: string; amount: number; quantity: number }[];
+        }) => api.sendWaPayment(payload),
+        onSettled: () => {
+            if (activeConversationId) {
+                queryClient.invalidateQueries({
+                    queryKey: ["conversation", activeConversationId],
+                });
+            }
             queryClient.invalidateQueries({ queryKey: ["conversations"] });
         },
     });

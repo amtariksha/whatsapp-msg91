@@ -18,16 +18,23 @@ import {
     Smartphone,
     Radio,
     Webhook,
+    Phone as PhoneIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn, getContactDisplayName, getContactInitials } from "@/lib/utils";
 import {
     useConversation,
     useUpdateConversationStatus,
     useAssignConversation,
     useUsers,
+    useVoiceCall,
 } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/components/auth-provider";
@@ -223,6 +230,18 @@ function MessageBubble({ message }: { message: Message }) {
                     </div>
                 )}
 
+                {(message.contentType as string) === "voice_call" && (
+                    <div
+                        className={cn(
+                            "flex items-center gap-2 mb-2 p-2 rounded-lg",
+                            isOutbound ? "bg-black/5 text-slate-800" : "bg-blue-50 border border-blue-100 text-blue-700"
+                        )}
+                    >
+                        <PhoneIcon className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-sm font-medium">Voice call initiated</span>
+                    </div>
+                )}
+
                 <p
                     className={cn(
                         "text-sm leading-relaxed whitespace-pre-wrap",
@@ -261,6 +280,8 @@ export function ChatWindow({ className }: { className?: string }) {
     );
     const updateStatus = useUpdateConversationStatus();
     const assignConversation = useAssignConversation();
+    const voiceCall = useVoiceCall();
+    const activeNumber = useAppStore((s) => s.activeNumber);
     const { data: users } = useUsers();
     const { user: currentUser } = useAuth();
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -437,6 +458,32 @@ export function ChatWindow({ className }: { className?: string }) {
                             </div>
                         )}
                     </div>
+
+                    {/* Voice Call button */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={voiceCall.isPending}
+                                onClick={() => {
+                                    if (confirm(`Initiate a WhatsApp voice call to +${conversation.contact.phone}?`)) {
+                                        voiceCall.mutate({
+                                            phone: conversation.contact.phone,
+                                            integratedNumber: activeNumber?.number || conversation.integratedNumber,
+                                            conversationId: conversation.id,
+                                        });
+                                    }
+                                }}
+                                className="text-xs h-8"
+                            >
+                                <PhoneIcon className={`w-3.5 h-3.5 ${voiceCall.isPending ? "animate-pulse" : ""}`} />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {voiceCall.isPending ? "Calling..." : "WhatsApp Voice Call"}
+                        </TooltipContent>
+                    </Tooltip>
 
                     {/* Reminder button */}
                     <Button
