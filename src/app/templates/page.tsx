@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, Fragment } from "react";
+import { useRouter } from "next/navigation";
 import {
     Plus,
     FileText,
@@ -33,7 +34,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { TemplateFormDialog } from "@/components/templates/template-form-dialog";
 
 interface LocalTemplate {
     id: string;
@@ -57,11 +57,11 @@ interface SyncedTemplate {
     language: string;
 }
 
-/** Render template body with highlighted {{N}} variables as React elements */
+/** Render template body with highlighted variables (named + numbered) */
 function renderPreviewBody(text: string) {
-    const parts = text.split(/(\{\{\d+\}\})/g);
+    const parts = text.split(/(\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}|\{\{\d+\}\})/g);
     return parts.map((part, i) => {
-        if (/^\{\{\d+\}\}$/.test(part)) {
+        if (/^\{\{.+\}\}$/.test(part)) {
             return (
                 <span
                     key={i}
@@ -115,15 +115,12 @@ const LANGUAGE_LABELS: Record<string, string> = {
 
 export default function TemplatesPage() {
     const { user } = useAuth();
+    const router = useRouter();
     const [activeTab, setActiveTab] = useState<"local" | "synced">("local");
     const [templates, setTemplates] = useState<LocalTemplate[]>([]);
     const [syncedTemplates, setSyncedTemplates] = useState<SyncedTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
-
-    // Form dialog state
-    const [formOpen, setFormOpen] = useState(false);
-    const [editTemplate, setEditTemplate] = useState<LocalTemplate | null>(null);
 
     // View dialog state
     const [viewTemplate, setViewTemplate] = useState<LocalTemplate | null>(null);
@@ -165,46 +162,12 @@ export default function TemplatesPage() {
         fetchLocalTemplates();
     }, []);
 
-    const handleSave = async (data: { name: string; category: string; language: string; body: string; footer: string; headerType?: string; headerContent?: string; buttons?: unknown[] }) => {
-        if (editTemplate?.msg91TemplateId) {
-            // Edit on MSG91 — use the remote edit route
-            const res = await fetch(`/api/templates/local/${editTemplate.id}/edit-remote`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
-            });
-            const result = await res.json();
-            if (!res.ok) {
-                alert(`MSG91 edit failed: ${result.error || "Unknown error"}`);
-                return;
-            }
-        } else if (editTemplate) {
-            // Local-only edit
-            await fetch(`/api/templates/local/${editTemplate.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
-            });
-        } else {
-            // Create new
-            await fetch("/api/templates/local", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
-            });
-        }
-        setEditTemplate(null);
-        fetchLocalTemplates();
+    const handleNewTemplate = () => {
+        router.push("/templates/create");
     };
 
     const handleEdit = (t: LocalTemplate) => {
-        setEditTemplate(t);
-        setFormOpen(true);
-    };
-
-    const handleNewTemplate = () => {
-        setEditTemplate(null);
-        setFormOpen(true);
+        router.push(`/templates/create?edit=${t.id}`);
     };
 
     const handleDuplicate = async (t: LocalTemplate) => {
@@ -217,6 +180,8 @@ export default function TemplatesPage() {
                 language: t.language,
                 body: t.body,
                 footer: t.footer || undefined,
+                headerType: t.headerType || undefined,
+                headerContent: t.headerContent || undefined,
             }),
         });
         fetchLocalTemplates();
@@ -231,12 +196,6 @@ export default function TemplatesPage() {
             await fetch(`/api/templates/local/${t.id}`, { method: "DELETE" });
         }
         fetchLocalTemplates();
-    };
-
-    const handleEditRemote = async (t: LocalTemplate) => {
-        // Opens the form dialog in edit mode — on save, sends to MSG91
-        setEditTemplate(t);
-        setFormOpen(true);
     };
 
     const handleCopyId = (id: string) => {
@@ -381,7 +340,7 @@ export default function TemplatesPage() {
                                                     Edit
                                                 </DropdownMenuItem>
                                                 {t.msg91TemplateId && (
-                                                    <DropdownMenuItem onClick={() => handleEditRemote(t)}>
+                                                    <DropdownMenuItem onClick={() => handleEdit(t)}>
                                                         <CloudUpload className="w-4 h-4 mr-2" />
                                                         Edit on MSG91
                                                     </DropdownMenuItem>
@@ -488,24 +447,6 @@ export default function TemplatesPage() {
                     )}
                 </>
             )}
-
-            {/* Template Form Dialog */}
-            <TemplateFormDialog
-                open={formOpen}
-                onOpenChange={(open) => {
-                    setFormOpen(open);
-                    if (!open) setEditTemplate(null);
-                }}
-                onSave={handleSave}
-                initialData={editTemplate ? {
-                    name: editTemplate.name,
-                    category: editTemplate.category,
-                    language: editTemplate.language,
-                    body: editTemplate.body,
-                    footer: editTemplate.footer || "",
-                } : undefined}
-                isEdit={!!editTemplate}
-            />
 
             {/* View Template Dialog */}
             <Dialog open={!!viewTemplate} onOpenChange={(open) => { if (!open) setViewTemplate(null); }}>

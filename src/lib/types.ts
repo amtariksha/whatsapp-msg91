@@ -241,15 +241,26 @@ export interface Reminder {
 // ─── Local Template ────────────────────────────────────────
 export type TemplateStatus = "draft" | "submitted" | "approved" | "rejected";
 
+export interface TemplateButton {
+  type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER" | "COPY_CODE";
+  text: string;
+  url?: string;
+  url_type?: "static" | "dynamic";
+  phone_number?: string;
+  example?: string; // for COPY_CODE sample code
+}
+
 export interface LocalTemplate {
   id: string;
   name: string;
   category: string;
   language: string;
-  headerText?: string;
-  bodyText: string;
-  footerText?: string;
-  buttons: Record<string, unknown>[];
+  headerType?: string;
+  headerContent?: string;
+  body: string;
+  footer?: string;
+  buttons?: TemplateButton[];
+  variableSamples?: Record<string, string>;
   status: TemplateStatus;
   msg91TemplateId?: string;
   submittedAt?: string;

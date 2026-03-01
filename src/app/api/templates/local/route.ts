@@ -24,6 +24,7 @@ export async function GET() {
             body: t.body,
             footer: t.footer || undefined,
             buttons: t.buttons || undefined,
+            variableSamples: t.variable_samples || undefined,
             status: t.status,
             msg91TemplateId: t.msg91_template_id || undefined,
             createdAt: t.created_at,
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
             body: body.body,
             footer: body.footer || null,
             buttons: body.buttons || null,
+            variable_samples: body.variableSamples || null,
             status: "draft",
         })
         .select()

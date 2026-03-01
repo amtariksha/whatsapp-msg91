@@ -1,6 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+/**
+ * Extract named variables from body text and map them to numbered {{1}}, {{2}}, etc.
+ * Returns { numberedBody, variableOrder } where variableOrder is the ordered list of variable names.
+ */
+function mapNamedToNumberedVariables(body: string): { numberedBody: string; variableOrder: string[] } {
+    const varRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
+    const variableOrder: string[] = [];
+    let match;
+
+    // Collect unique variable names in order of first appearance
+    while ((match = varRegex.exec(body)) !== null) {
+        if (!variableOrder.includes(match[1])) {
+            variableOrder.push(match[1]);
+        }
+    }
+
+    // Replace named variables with numbered ones
+    let numberedBody = body;
+    variableOrder.forEach((varName, index) => {
+        numberedBody = numberedBody.replace(
+            new RegExp(`\\{\\{${varName}\\}\\}`, "g"),
+            `{{${index + 1}}}`
+        );
+    });
+
+    return { numberedBody, variableOrder };
+}
+
 // ─── POST /api/templates/local/[id]/submit ───────────────────
 // Submit a local template to MSG91 for WhatsApp/Facebook approval
 export async function POST(
@@ -28,7 +56,6 @@ export async function POST(
     if (dbNumbers?.number) {
         integratedNumber = dbNumbers.number;
     } else {
-        // Fallback to env var
         integratedNumber = (process.env.MSG91_INTEGRATED_NUMBER || "").replace(/^\+/, "");
         if (!integratedNumber) {
             const envNumbers = process.env.MSG91_INTEGRATED_NUMBERS || "";
@@ -58,28 +85,57 @@ export async function POST(
         );
     }
 
+    // Map named variables to numbered variables
+    const { numberedBody, variableOrder } = mapNamedToNumberedVariables(template.body);
+    const variableSamples: Record<string, string> = template.variable_samples || {};
+
     // Build the MSG91 template payload
-    // MSG91 API: POST https://api.msg91.com/api/v5/whatsapp/whatsapp-template/
     const components: Record<string, unknown>[] = [];
 
     // Header component (optional)
-    if (template.header_type && template.header_content) {
-        if (template.header_type === "TEXT") {
+    if (template.header_type) {
+        const headerType = template.header_type.toUpperCase();
+        if (headerType === "TEXT" && template.header_content) {
             components.push({
                 type: "HEADER",
                 format: "TEXT",
                 text: template.header_content,
             });
+        } else if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerType) && template.header_content) {
+            // Media header — content is the URL
+            const headerComponent: Record<string, unknown> = {
+                type: "HEADER",
+                format: headerType,
+            };
+            // Provide example handle/URL for media headers
+            headerComponent.example = {
+                header_handle: [template.header_content],
+            };
+            components.push(headerComponent);
+        } else if (headerType === "LOCATION") {
+            components.push({
+                type: "HEADER",
+                format: "LOCATION",
+            });
         }
-        // For media headers (IMAGE, VIDEO, DOCUMENT) the format is different
-        // but text headers are the most common for initial implementation
     }
 
-    // Body component (required)
-    components.push({
+    // Body component (required) — use numbered variables
+    const bodyComponent: Record<string, unknown> = {
         type: "BODY",
-        text: template.body,
-    });
+        text: numberedBody,
+    };
+
+    // Add example values if we have variables
+    if (variableOrder.length > 0) {
+        const sampleValues = variableOrder.map(
+            (varName) => variableSamples[varName] || varName
+        );
+        bodyComponent.example = {
+            body_text: [sampleValues],
+        };
+    }
+    components.push(bodyComponent);
 
     // Footer component (optional)
     if (template.footer) {
@@ -89,11 +145,40 @@ export async function POST(
         });
     }
 
-    // Buttons (optional)
+    // Buttons (optional) — map to WhatsApp API format
     if (template.buttons && Array.isArray(template.buttons) && template.buttons.length > 0) {
+        const mappedButtons = template.buttons.map((btn: Record<string, unknown>) => {
+            const btnType = (btn.type as string || "").toUpperCase();
+            if (btnType === "QUICK_REPLY") {
+                return { type: "QUICK_REPLY", text: btn.text };
+            } else if (btnType === "URL") {
+                const urlBtn: Record<string, unknown> = {
+                    type: "URL",
+                    text: btn.text,
+                    url: btn.url,
+                };
+                if (btn.url_type === "dynamic") {
+                    urlBtn.example = [btn.url];
+                }
+                return urlBtn;
+            } else if (btnType === "PHONE_NUMBER") {
+                return {
+                    type: "PHONE_NUMBER",
+                    text: btn.text,
+                    phone_number: btn.phone_number,
+                };
+            } else if (btnType === "COPY_CODE") {
+                return {
+                    type: "COPY_CODE",
+                    example: btn.example || "",
+                };
+            }
+            return btn;
+        });
+
         components.push({
             type: "BUTTONS",
-            buttons: template.buttons,
+            buttons: mappedButtons,
         });
     }
 
@@ -104,7 +189,6 @@ export async function POST(
         components,
     };
 
-    // Include integrated_number if available
     if (integratedNumber) {
         msg91Payload.integrated_number = integratedNumber;
     }
@@ -136,7 +220,6 @@ export async function POST(
 
         if (!response.ok) {
             console.error("[Template Submit] MSG91 HTTP error:", response.status, responseText);
-            // Extract the most useful error message from MSG91's response
             const msg91Error = typeof responseData === "object"
                 ? (responseData?.message || responseData?.errors || responseData?.error || responseText)
                 : responseText;

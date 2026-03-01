@@ -18,6 +18,7 @@ export async function PATCH(
     if (body.body !== undefined) updateData.body = body.body;
     if (body.footer !== undefined) updateData.footer = body.footer;
     if (body.buttons !== undefined) updateData.buttons = body.buttons;
+    if (body.variableSamples !== undefined) updateData.variable_samples = body.variableSamples;
     if (body.status !== undefined) updateData.status = body.status;
 
     const { data, error } = await supabaseAdmin

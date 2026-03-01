@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+/**
+ * Map named variables {{name}} to numbered {{1}}, {{2}} etc.
+ */
+function mapNamedToNumberedVariables(bodyText: string): { numberedBody: string; variableOrder: string[] } {
+    const varRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
+    const variableOrder: string[] = [];
+    let match;
+
+    while ((match = varRegex.exec(bodyText)) !== null) {
+        if (!variableOrder.includes(match[1])) {
+            variableOrder.push(match[1]);
+        }
+    }
+
+    let numberedBody = bodyText;
+    variableOrder.forEach((varName, index) => {
+        numberedBody = numberedBody.replace(
+            new RegExp(`\\{\\{${varName}\\}\\}`, "g"),
+            `{{${index + 1}}}`
+        );
+    });
+
+    return { numberedBody, variableOrder };
+}
+
 // ─── PUT /api/templates/local/[id]/edit-remote ────────────────
 // Edit a template on MSG91 (already submitted/approved)
 export async function PUT(
@@ -55,21 +80,63 @@ export async function PUT(
         );
     }
 
+    // Map named variables
+    const { numberedBody, variableOrder } = mapNamedToNumberedVariables(body.body || template.body);
+    const variableSamples: Record<string, string> = body.variableSamples || template.variable_samples || {};
+
     // Build MSG91 components from request body
     const components: Record<string, unknown>[] = [];
 
-    if (body.headerType === "TEXT" && body.headerContent) {
+    // Header
+    const headerType = (body.headerType || "").toUpperCase();
+    if (headerType === "TEXT" && body.headerContent) {
         components.push({ type: "HEADER", format: "TEXT", text: body.headerContent });
+    } else if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerType) && body.headerContent) {
+        components.push({
+            type: "HEADER",
+            format: headerType,
+            example: { header_handle: [body.headerContent] },
+        });
+    } else if (headerType === "LOCATION") {
+        components.push({ type: "HEADER", format: "LOCATION" });
     }
 
-    components.push({ type: "BODY", text: body.body });
+    // Body with numbered variables and example values
+    const bodyComponent: Record<string, unknown> = {
+        type: "BODY",
+        text: numberedBody,
+    };
+    if (variableOrder.length > 0) {
+        const sampleValues = variableOrder.map(
+            (varName) => variableSamples[varName] || varName
+        );
+        bodyComponent.example = { body_text: [sampleValues] };
+    }
+    components.push(bodyComponent);
 
+    // Footer
     if (body.footer) {
         components.push({ type: "FOOTER", text: body.footer });
     }
 
+    // Buttons
     if (body.buttons && Array.isArray(body.buttons) && body.buttons.length > 0) {
-        components.push({ type: "BUTTONS", buttons: body.buttons });
+        const mappedButtons = body.buttons.map((btn: Record<string, unknown>) => {
+            const btnType = (btn.type as string || "").toUpperCase();
+            if (btnType === "QUICK_REPLY") {
+                return { type: "QUICK_REPLY", text: btn.text };
+            } else if (btnType === "URL") {
+                const urlBtn: Record<string, unknown> = { type: "URL", text: btn.text, url: btn.url };
+                if (btn.url_type === "dynamic") urlBtn.example = [btn.url];
+                return urlBtn;
+            } else if (btnType === "PHONE_NUMBER") {
+                return { type: "PHONE_NUMBER", text: btn.text, phone_number: btn.phone_number };
+            } else if (btnType === "COPY_CODE") {
+                return { type: "COPY_CODE", example: btn.example || "" };
+            }
+            return btn;
+        });
+        components.push({ type: "BUTTONS", buttons: mappedButtons });
     }
 
     const msg91Payload: Record<string, unknown> = {
@@ -137,6 +204,7 @@ export async function PUT(
         if (body.headerContent !== undefined) updateData.header_content = body.headerContent;
         if (body.footer !== undefined) updateData.footer = body.footer;
         if (body.buttons !== undefined) updateData.buttons = body.buttons;
+        if (body.variableSamples !== undefined) updateData.variable_samples = body.variableSamples;
 
         await supabaseAdmin
             .from("templates_local")

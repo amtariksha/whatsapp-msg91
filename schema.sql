@@ -162,6 +162,7 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS external_id TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_internal_note BOOLEAN DEFAULT false;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'webapp';
+ALTER TABLE templates_local ADD COLUMN IF NOT EXISTS variable_samples JSONB DEFAULT '{}';
 
 -- ─── Indexes ──────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_conversations_contact ON conversations(contact_id);
