@@ -90,6 +90,8 @@ export async function GET(
             conv.last_incoming_timestamp || conv.last_message_time,
         unreadCount: conv.unread_count || 0,
         messages: (messages || []).map(mapMessage),
+        ctwaClid: conv.ctwa_clid || undefined,
+        source: conv.source || "organic",
     };
 
     return NextResponse.json(result);
@@ -160,5 +162,7 @@ export async function PATCH(
             data.last_incoming_timestamp || data.last_message_time,
         unreadCount: data.unread_count || 0,
         messages: [],
+        ctwaClid: data.ctwa_clid || undefined,
+        source: data.source || "organic",
     });
 }

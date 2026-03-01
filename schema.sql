@@ -153,6 +153,60 @@ CREATE TABLE IF NOT EXISTS integrated_numbers (
     meta_access_token TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- ─── CTWA Config ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ctwa_config (
+    id                UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    facebook_user_id  TEXT NOT NULL,
+    facebook_name     TEXT,
+    access_token      TEXT NOT NULL,
+    ad_account_id     TEXT,
+    ad_account_name   TEXT,
+    dataset_id        TEXT,
+    capi_enabled      BOOLEAN DEFAULT false,
+    capi_lead_tag     TEXT DEFAULT 'lead',
+    capi_purchase_tag TEXT DEFAULT 'purchase',
+    connected_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── CTWA Ads (synced from Meta) ────────────────────────────
+CREATE TABLE IF NOT EXISTS ctwa_ads (
+    id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    ad_account_id   TEXT NOT NULL,
+    campaign_id     TEXT NOT NULL,
+    campaign_name   TEXT,
+    adset_id        TEXT,
+    adset_name      TEXT,
+    ad_id           TEXT,
+    ad_name         TEXT,
+    status          TEXT,
+    objective       TEXT,
+    impressions     BIGINT DEFAULT 0,
+    clicks          BIGINT DEFAULT 0,
+    spend           NUMERIC(12,2) DEFAULT 0,
+    leads           INTEGER DEFAULT 0,
+    synced_at       TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(ad_account_id, campaign_id)
+);
+
+-- ─── CTWA Logs (click-to-whatsapp conversation logs) ────────
+CREATE TABLE IF NOT EXISTS ctwa_logs (
+    id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    ctwa_clid       TEXT NOT NULL,
+    conversation_id UUID REFERENCES conversations(id),
+    contact_id      UUID REFERENCES contacts(id),
+    source_id       TEXT,
+    source_type     TEXT,
+    source_url      TEXT,
+    headline        TEXT,
+    body            TEXT,
+    media_type      TEXT,
+    media_url       TEXT,
+    ad_name         TEXT,
+    campaign_name   TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Migrations (add columns to existing tables) ─────────────
 -- Safe to re-run: ADD COLUMN IF NOT EXISTS is idempotent
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES users(id) ON DELETE SET NULL;
@@ -163,6 +217,8 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_internal_note BOOLEAN DEFAULT f
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'webapp';
 ALTER TABLE templates_local ADD COLUMN IF NOT EXISTS variable_samples JSONB DEFAULT '{}';
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ctwa_clid TEXT;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'organic';
 
 -- ─── Indexes ──────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_conversations_contact ON conversations(contact_id);
@@ -176,6 +232,9 @@ CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
 CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at);
 CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phone);
 CREATE INDEX IF NOT EXISTS idx_messages_external_id ON messages(external_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_ctwa ON conversations(ctwa_clid) WHERE ctwa_clid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ctwa_logs_conversation ON ctwa_logs(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_ctwa_logs_contact ON ctwa_logs(contact_id);
 
 -- ─── RLS (enable on all tables) ───────────────────────────────
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -188,6 +247,9 @@ ALTER TABLE quick_replies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE templates_local ENABLE ROW LEVEL SECURITY;
 ALTER TABLE integrated_numbers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ctwa_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ctwa_ads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ctwa_logs ENABLE ROW LEVEL SECURITY;
 
 -- Service role policies (full access for server-side)
 -- Drop first to avoid "already exists" errors on re-run
@@ -202,6 +264,9 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Service role full access" ON templates_local;
     DROP POLICY IF EXISTS "Service role full access" ON integrated_numbers;
     DROP POLICY IF EXISTS "Service role full access" ON app_settings;
+    DROP POLICY IF EXISTS "Service role full access" ON ctwa_config;
+    DROP POLICY IF EXISTS "Service role full access" ON ctwa_ads;
+    DROP POLICY IF EXISTS "Service role full access" ON ctwa_logs;
 END $$;
 
 CREATE POLICY "Service role full access" ON users FOR ALL USING (true);
@@ -214,3 +279,6 @@ CREATE POLICY "Service role full access" ON quick_replies FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON templates_local FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON integrated_numbers FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON app_settings FOR ALL USING (true);
+CREATE POLICY "Service role full access" ON ctwa_config FOR ALL USING (true);
+CREATE POLICY "Service role full access" ON ctwa_ads FOR ALL USING (true);
+CREATE POLICY "Service role full access" ON ctwa_logs FOR ALL USING (true);

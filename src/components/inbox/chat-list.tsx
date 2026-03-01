@@ -111,11 +111,16 @@ function ConversationItem({
             <div className="flex items-start justify-between w-full mb-1">
                 <span
                     className={cn(
-                        "text-sm font-semibold truncate pr-2",
+                        "text-sm font-semibold truncate pr-2 flex items-center gap-1.5",
                         isActive ? "text-slate-900" : "text-slate-700"
                     )}
                 >
                     {displayName}
+                    {conversation.source === "ctwa" && (
+                        <span className="inline-flex items-center px-1.5 py-0 rounded text-[9px] font-bold bg-green-100 text-green-700 flex-shrink-0" title="This conversation started from a WhatsApp ad">
+                            Ad
+                        </span>
+                    )}
                 </span>
                 <span className="text-[10px] text-slate-400 flex-shrink-0 pt-0.5">
                     {formatChatTime(conversation.lastMessageTime)}

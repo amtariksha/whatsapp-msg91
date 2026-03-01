@@ -14,6 +14,9 @@ import type {
     LocalTemplate,
     PaginatedContacts,
     WhatsAppLogsResponse,
+    CTWAConfig,
+    CTWAAd,
+    CTWALog,
 } from "./types";
 
 const BASE_URL = "";
@@ -442,5 +445,75 @@ export async function sendWaPayment(payload: {
         body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("Failed to send WA payment");
+    return res.json();
+}
+
+// ─── CTWA (Click-to-WhatsApp Ads) ─────────────────────────
+export async function getCTWAConfig(): Promise<CTWAConfig & { connected: boolean }> {
+    const res = await fetch(`${BASE_URL}/api/ctwa/config`);
+    if (!res.ok) throw new Error("Failed to fetch CTWA config");
+    return res.json();
+}
+
+export async function updateCTWAConfig(data: {
+    adAccountId?: string;
+    adAccountName?: string;
+    datasetId?: string;
+    capiEnabled?: boolean;
+    capiLeadTag?: string;
+    capiPurchaseTag?: string;
+}): Promise<{ success: boolean }> {
+    const res = await fetch(`${BASE_URL}/api/ctwa/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Failed to update CTWA config");
+    return res.json();
+}
+
+export async function getCTWAAuthUrl(): Promise<{ url: string }> {
+    const res = await fetch(`${BASE_URL}/api/ctwa/auth-url`);
+    if (!res.ok) throw new Error("Failed to get CTWA auth URL");
+    return res.json();
+}
+
+export async function disconnectCTWA(): Promise<{ success: boolean }> {
+    const res = await fetch(`${BASE_URL}/api/ctwa/disconnect`, {
+        method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to disconnect CTWA");
+    return res.json();
+}
+
+export async function getCTWAAds(): Promise<CTWAAd[]> {
+    const res = await fetch(`${BASE_URL}/api/ctwa/ads`);
+    if (!res.ok) throw new Error("Failed to fetch CTWA ads");
+    return res.json();
+}
+
+export async function syncCTWAAds(): Promise<{ success: boolean; synced: number }> {
+    const res = await fetch(`${BASE_URL}/api/ctwa/ads`, {
+        method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to sync CTWA ads");
+    return res.json();
+}
+
+export async function getCTWALogs(params?: {
+    from?: string;
+    to?: string;
+    campaign?: string;
+    page?: number;
+    limit?: number;
+}): Promise<{ logs: CTWALog[]; total: number; page: number; limit: number }> {
+    const searchParams = new URLSearchParams();
+    if (params?.from) searchParams.set("from", params.from);
+    if (params?.to) searchParams.set("to", params.to);
+    if (params?.campaign) searchParams.set("campaign", params.campaign);
+    searchParams.set("page", String(params?.page || 1));
+    searchParams.set("limit", String(params?.limit || 20));
+    const res = await fetch(`${BASE_URL}/api/ctwa/logs?${searchParams.toString()}`);
+    if (!res.ok) throw new Error("Failed to fetch CTWA logs");
     return res.json();
 }

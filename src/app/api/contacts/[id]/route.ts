@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { sendConversionEvent } from "@/lib/capi";
 
 function mapContact(row: Record<string, unknown>) {
     return {
@@ -41,6 +42,17 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
+    // Fetch current tags before update for CAPI diff
+    let oldTags: string[] = [];
+    if (body.tags) {
+        const { data: currentContact } = await supabaseAdmin
+            .from("contacts")
+            .select("tags")
+            .eq("id", id)
+            .single();
+        oldTags = (currentContact?.tags as string[]) || [];
+    }
+
     const updateData: Record<string, unknown> = {};
     if (body.tags) updateData.tags = body.tags;
     if (body.name) updateData.name = body.name;
@@ -61,5 +73,67 @@ export async function PATCH(
         );
     }
 
+    // ─── CAPI Trigger: Send conversion events on tag changes ───
+    if (body.tags) {
+        const newTags: string[] = body.tags;
+        const addedTags = newTags.filter((t: string) => !oldTags.includes(t));
+
+        if (addedTags.length > 0) {
+            // Fire and forget — don't block the response
+            triggerCAPIForTags(id, addedTags).catch((err) => {
+                console.error("[CAPI Trigger] Error:", err);
+            });
+        }
+    }
+
     return NextResponse.json(mapContact(data));
+}
+
+/**
+ * Check if newly added tags match CAPI lead/purchase tags and send conversion events.
+ */
+async function triggerCAPIForTags(contactId: string, addedTags: string[]) {
+    // Fetch CAPI config
+    const { data: config } = await supabaseAdmin
+        .from("ctwa_config")
+        .select("capi_enabled, capi_lead_tag, capi_purchase_tag, dataset_id, access_token")
+        .limit(1)
+        .maybeSingle();
+
+    if (!config || !config.capi_enabled || !config.dataset_id || !config.access_token) {
+        return; // CAPI not configured or not enabled
+    }
+
+    // Find a CTWA conversation for this contact (need ctwa_clid)
+    const { data: ctwaConv } = await supabaseAdmin
+        .from("conversations")
+        .select("ctwa_clid")
+        .eq("contact_id", contactId)
+        .not("ctwa_clid", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (!ctwaConv?.ctwa_clid) {
+        return; // No CTWA conversation for this contact, can't send CAPI event
+    }
+
+    for (const tag of addedTags) {
+        if (tag === config.capi_lead_tag) {
+            const result = await sendConversionEvent(
+                { eventName: "Lead", ctwaClid: ctwaConv.ctwa_clid },
+                config.dataset_id,
+                config.access_token
+            );
+            console.log(`[CAPI Trigger] Lead event for contact ${contactId}: ${result.success ? "sent" : result.error}`);
+        }
+        if (tag === config.capi_purchase_tag) {
+            const result = await sendConversionEvent(
+                { eventName: "Purchase", ctwaClid: ctwaConv.ctwa_clid },
+                config.dataset_id,
+                config.access_token
+            );
+            console.log(`[CAPI Trigger] Purchase event for contact ${contactId}: ${result.success ? "sent" : result.error}`);
+        }
+    }
 }

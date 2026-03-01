@@ -16,6 +16,7 @@ import {
     FileText,
     LogOut,
     Wallet,
+    Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,6 +44,7 @@ const navItems = [
     { href: "/broadcast", label: "Broadcast", icon: Megaphone },
     { href: "/contacts", label: "Contacts", icon: Users },
     { href: "/payments", label: "Payments", icon: IndianRupee },
+    { href: "/ad-campaigns", label: "Ad Campaigns", icon: Target },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 

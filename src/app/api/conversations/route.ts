@@ -38,6 +38,8 @@ function mapConversation(row: Record<string, unknown>) {
         lastIncomingTimestamp: (row.last_incoming_timestamp as string) || (row.last_message_time as string),
         unreadCount: (row.unread_count as number) || 0,
         messages: [] as Array<Record<string, unknown>>, // Messages loaded separately via [id] route
+        ctwaClid: (row.ctwa_clid as string) || undefined,
+        source: (row.source as string) || "organic",
     };
 }
 

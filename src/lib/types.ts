@@ -32,7 +32,7 @@ export interface PaginatedContacts {
 export type MessageDirection = "inbound" | "outbound";
 export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
 export type MessageContentType = "text" | "image" | "document" | "template" | "interactive" | "location" | "contact";
-export type MessageSource = "webapp" | "mobile_app" | "api" | "broadcast" | "customer";
+export type MessageSource = "webapp" | "mobile_app" | "api" | "broadcast" | "customer" | "ctwa";
 
 export interface Message {
   id: string;
@@ -50,6 +50,7 @@ export interface Message {
 
 // ─── Conversation ──────────────────────────────────────────
 export type ConversationStatus = "open" | "resolved";
+export type ConversationSource = "organic" | "ctwa";
 
 export interface Conversation {
   id: string;
@@ -65,6 +66,8 @@ export interface Conversation {
   lastIncomingTimestamp: string;
   unreadCount: number;
   messages: Message[];
+  ctwaClid?: string;
+  source?: ConversationSource;
 }
 
 // ─── Template ──────────────────────────────────────────────
@@ -267,6 +270,61 @@ export interface LocalTemplate {
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── CTWA (Click-to-WhatsApp Ads) ─────────────────────────
+export interface CTWAConfig {
+  id: string;
+  facebookUserId: string;
+  facebookName?: string;
+  accessToken: string;
+  adAccountId?: string;
+  adAccountName?: string;
+  datasetId?: string;
+  capiEnabled: boolean;
+  capiLeadTag: string;
+  capiPurchaseTag: string;
+  connectedAt: string;
+  updatedAt: string;
+}
+
+export interface CTWAAd {
+  id: string;
+  adAccountId: string;
+  campaignId: string;
+  campaignName?: string;
+  adsetId?: string;
+  adsetName?: string;
+  adId?: string;
+  adName?: string;
+  status?: string;
+  objective?: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  leads: number;
+  syncedAt: string;
+}
+
+export interface CTWALog {
+  id: string;
+  ctwaClid: string;
+  conversationId?: string;
+  contactId?: string;
+  sourceId?: string;
+  sourceType?: string;
+  sourceUrl?: string;
+  headline?: string;
+  body?: string;
+  mediaType?: string;
+  mediaUrl?: string;
+  adName?: string;
+  campaignName?: string;
+  createdAt: string;
+  // Joined fields
+  contactName?: string;
+  contactPhone?: string;
+  conversationStatus?: string;
 }
 
 // ─── WhatsApp Log ─────────────────────────────────────────

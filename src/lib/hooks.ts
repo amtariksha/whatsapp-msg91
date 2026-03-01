@@ -448,6 +448,63 @@ export function useVoiceCall() {
     });
 }
 
+// ─── CTWA (Click-to-WhatsApp Ads) ─────────────────────────
+export function useCTWAConfig() {
+    return useQuery({
+        queryKey: ["ctwa-config"],
+        queryFn: api.getCTWAConfig,
+        staleTime: 30 * 1000,
+    });
+}
+
+export function useUpdateCTWAConfig() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: {
+            adAccountId?: string;
+            adAccountName?: string;
+            datasetId?: string;
+            capiEnabled?: boolean;
+            capiLeadTag?: string;
+            capiPurchaseTag?: string;
+        }) => api.updateCTWAConfig(data),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["ctwa-config"] });
+        },
+    });
+}
+
+export function useCTWAAds() {
+    return useQuery({
+        queryKey: ["ctwa-ads"],
+        queryFn: api.getCTWAAds,
+    });
+}
+
+export function useSyncCTWAAds() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: () => api.syncCTWAAds(),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["ctwa-ads"] });
+        },
+    });
+}
+
+export function useCTWALogs(params?: {
+    from?: string;
+    to?: string;
+    campaign?: string;
+    page?: number;
+    limit?: number;
+}) {
+    return useQuery({
+        queryKey: ["ctwa-logs", params],
+        queryFn: () => api.getCTWALogs(params),
+        placeholderData: (prev) => prev,
+    });
+}
+
 // ─── WA Native Payment ────────────────────────────────────
 export function useWaPayment() {
     const queryClient = useQueryClient();

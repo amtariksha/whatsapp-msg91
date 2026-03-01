@@ -273,6 +273,22 @@ export async function POST(request: NextRequest) {
             console.log(`[MSG91 Webhook] Updated contact name to "${senderName}"`);
         }
 
+        // ─── CTWA Referral Detection ─────────────────────────
+        // Check if the inbound message contains a CTWA referral (click-to-whatsapp ad)
+        const referral = body.referral || body.context?.referral || null;
+        const ctwaClid = referral?.ctwa_clid || referral?.ctwaid || null;
+        const referralSourceId = referral?.source_id || referral?.ad_id || null;
+        const referralSourceType = referral?.source_type || (ctwaClid ? "ad" : null);
+        const referralSourceUrl = referral?.source_url || referral?.url || null;
+        const referralHeadline = referral?.headline || referral?.head || null;
+        const referralBody = referral?.body || referral?.description || null;
+        const referralMediaType = referral?.media_type || null;
+        const referralMediaUrl = referral?.media_url || referral?.image_url || null;
+
+        if (ctwaClid) {
+            console.log(`[MSG91 Webhook] CTWA referral detected. ctwa_clid: ${ctwaClid}, source_id: ${referralSourceId}`);
+        }
+
         // ─── 2. Upsert Conversation ────────────────────────
         let { data: conversation } = await supabaseAdmin
             .from("conversations")
@@ -282,17 +298,23 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (!conversation) {
+            const convInsert: Record<string, unknown> = {
+                contact_id: contact!.id,
+                integrated_number: actualBusinessPhone || "default",
+                status: "open",
+                last_message: messageBody || "[media]",
+                last_message_time: new Date().toISOString(),
+                last_incoming_timestamp: isExternalOutbound ? undefined : new Date().toISOString(),
+                unread_count: isExternalOutbound ? 0 : 1,
+            };
+            // Tag CTWA source on new conversations
+            if (ctwaClid) {
+                convInsert.ctwa_clid = ctwaClid;
+                convInsert.source = "ctwa";
+            }
             const { data: newConv, error: convError } = await supabaseAdmin
                 .from("conversations")
-                .insert({
-                    contact_id: contact!.id,
-                    integrated_number: actualBusinessPhone || "default",
-                    status: "open",
-                    last_message: messageBody || "[media]",
-                    last_message_time: new Date().toISOString(),
-                    last_incoming_timestamp: isExternalOutbound ? undefined : new Date().toISOString(),
-                    unread_count: isExternalOutbound ? 0 : 1,
-                })
+                .insert(convInsert)
                 .select("id")
                 .single();
 
@@ -332,6 +354,36 @@ export async function POST(request: NextRequest) {
                         .update({ unread_count: (convData.unread_count || 0) + 1 })
                         .eq("id", conversation.id);
                 }
+            }
+        }
+
+        // ─── Log CTWA referral ────────────────────────────
+        if (ctwaClid && conversation) {
+            // Also update existing conversation with CTWA source if not already set
+            await supabaseAdmin
+                .from("conversations")
+                .update({ ctwa_clid: ctwaClid, source: "ctwa" })
+                .eq("id", conversation.id)
+                .is("ctwa_clid", null); // only if not already tagged
+
+            const { error: logError } = await supabaseAdmin
+                .from("ctwa_logs")
+                .insert({
+                    ctwa_clid: ctwaClid,
+                    conversation_id: conversation.id,
+                    contact_id: contact!.id,
+                    source_id: referralSourceId,
+                    source_type: referralSourceType,
+                    source_url: referralSourceUrl,
+                    headline: referralHeadline,
+                    body: referralBody,
+                    media_type: referralMediaType,
+                    media_url: referralMediaUrl,
+                });
+            if (logError) {
+                console.error("[MSG91 Webhook] CTWA log insert error:", logError);
+            } else {
+                console.log(`[MSG91 Webhook] CTWA log created for conversation ${conversation.id}`);
             }
         }
 
@@ -412,7 +464,9 @@ export async function POST(request: NextRequest) {
 
         // Determine message source for sender icon differentiation
         let messageSource = "customer"; // default: inbound from customer
-        if (isExternalOutbound) {
+        if (ctwaClid && !isExternalOutbound) {
+            messageSource = "ctwa"; // first message from a CTWA ad click
+        } else if (isExternalOutbound) {
             if (msgCampaignName) {
                 messageSource = "broadcast";
             } else if (isSenderBusinessNumber) {
