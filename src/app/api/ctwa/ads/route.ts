@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-
-const META_API_VERSION = process.env.META_API_VERSION || "v21.0";
+import { getCTWASettings } from "@/lib/ctwa-settings";
 
 // ─── GET /api/ctwa/ads ───────────────────────────────────────
 // Returns synced CTWA ads/campaigns from DB
@@ -60,10 +59,12 @@ export async function POST() {
         );
     }
 
+    const { metaApiVersion } = await getCTWASettings();
+
     try {
         // Fetch campaigns from Meta
         const campaignsRes = await fetch(
-            `https://graph.facebook.com/${META_API_VERSION}/${config.ad_account_id}/campaigns?` +
+            `https://graph.facebook.com/${metaApiVersion}/${config.ad_account_id}/campaigns?` +
             `fields=name,status,objective&limit=100&access_token=${config.access_token}`
         );
         const campaignsData = await campaignsRes.json();
@@ -87,7 +88,7 @@ export async function POST() {
 
             try {
                 const insightsRes = await fetch(
-                    `https://graph.facebook.com/${META_API_VERSION}/${campaign.id}/insights?` +
+                    `https://graph.facebook.com/${metaApiVersion}/${campaign.id}/insights?` +
                     `fields=impressions,clicks,spend&date_preset=maximum&access_token=${config.access_token}`
                 );
                 const insightsData = await insightsRes.json();

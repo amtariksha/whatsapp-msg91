@@ -516,6 +516,10 @@ function GeneralSettingsTab() {
     const [catalogId, setCatalogId] = useState("");
     const [contactsPageSize, setContactsPageSize] = useState("25");
     const [paymentsPageSize, setPaymentsPageSize] = useState("20");
+    const [facebookAppId, setFacebookAppId] = useState("");
+    const [facebookAppSecret, setFacebookAppSecret] = useState("");
+    const [facebookOauthRedirectUri, setFacebookOauthRedirectUri] = useState("");
+    const [metaApiVersion, setMetaApiVersion] = useState("v21.0");
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
@@ -524,6 +528,10 @@ function GeneralSettingsTab() {
             setCatalogId(settings.whatsapp_catalog_id || "");
             setContactsPageSize(settings.contacts_page_size || "25");
             setPaymentsPageSize(settings.payments_page_size || "20");
+            setFacebookAppId(settings.facebook_app_id || "");
+            setFacebookAppSecret(settings.facebook_app_secret || "");
+            setFacebookOauthRedirectUri(settings.facebook_oauth_redirect_uri || "");
+            setMetaApiVersion(settings.meta_api_version || "v21.0");
         }
     }, [settings]);
 
@@ -536,6 +544,10 @@ function GeneralSettingsTab() {
                 whatsapp_catalog_id: catalogId,
                 contacts_page_size: String(Math.min(100, Math.max(5, parseInt(contactsPageSize) || 25))),
                 payments_page_size: String(Math.min(100, Math.max(5, parseInt(paymentsPageSize) || 20))),
+                facebook_app_id: facebookAppId,
+                facebook_app_secret: facebookAppSecret,
+                facebook_oauth_redirect_uri: facebookOauthRedirectUri,
+                meta_api_version: metaApiVersion || "v21.0",
             },
             {
                 onSuccess: () => {
@@ -639,6 +651,75 @@ function GeneralSettingsTab() {
                                 className="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                             />
                             <p className="text-[11px] text-slate-400 mt-1">5 – 100 items per page</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Facebook / CTWA Settings */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+                        Facebook / CTWA (Click-to-WhatsApp Ads)
+                    </h3>
+                    <div className="space-y-5">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Facebook App ID
+                            </label>
+                            <input
+                                type="text"
+                                value={facebookAppId}
+                                onChange={(e) => setFacebookAppId(e.target.value)}
+                                placeholder="e.g. 1234567890123456"
+                                className="w-full max-w-md px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                Your Facebook App ID from the Meta Developer Console. This is the same app used for WhatsApp integration.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Facebook App Secret
+                            </label>
+                            <input
+                                type="password"
+                                value={facebookAppSecret}
+                                onChange={(e) => setFacebookAppSecret(e.target.value)}
+                                placeholder="••••••••••••••••"
+                                className="w-full max-w-md px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                Your Facebook App Secret. Found under App Settings → Basic in the Meta Developer Console.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                OAuth Redirect URI
+                            </label>
+                            <input
+                                type="url"
+                                value={facebookOauthRedirectUri}
+                                onChange={(e) => setFacebookOauthRedirectUri(e.target.value)}
+                                placeholder="e.g. https://your-domain.com/api/ctwa/callback"
+                                className="w-full max-w-md px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                The redirect URL Facebook returns to after OAuth authorization. Must match exactly what&apos;s configured in your Facebook App. For local dev use <code className="text-[11px] bg-slate-100 px-1 rounded">http://localhost:3000/api/ctwa/callback</code>.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Meta API Version
+                            </label>
+                            <input
+                                type="text"
+                                value={metaApiVersion}
+                                onChange={(e) => setMetaApiVersion(e.target.value)}
+                                placeholder="e.g. v21.0"
+                                className="w-full max-w-[140px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                The Graph API version to use for Meta API calls (e.g. v21.0). Keep this updated to the latest stable version.
+                            </p>
                         </div>
                     </div>
                 </div>

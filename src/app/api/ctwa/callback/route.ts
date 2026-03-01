@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-
-const META_API_VERSION = process.env.META_API_VERSION || "v21.0";
+import { getCTWASettings } from "@/lib/ctwa-settings";
 
 // ─── GET /api/ctwa/callback ──────────────────────────────────
 // Facebook OAuth redirect handler
@@ -20,12 +19,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${baseUrl}/ad-campaigns?error=no_code`);
     }
 
-    const appId = process.env.FACEBOOK_APP_ID;
-    const appSecret = process.env.FACEBOOK_APP_SECRET;
-    const redirectUri = process.env.FACEBOOK_OAUTH_REDIRECT_URI;
+    const {
+        facebookAppId: appId,
+        facebookAppSecret: appSecret,
+        facebookOauthRedirectUri: redirectUri,
+        metaApiVersion,
+    } = await getCTWASettings();
 
     if (!appId || !appSecret || !redirectUri) {
-        console.error("[CTWA Callback] Missing env vars");
+        console.error("[CTWA Callback] Missing Facebook config (check Settings → General)");
         const baseUrl = request.nextUrl.origin;
         return NextResponse.redirect(`${baseUrl}/ad-campaigns?error=config_missing`);
     }
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
     try {
         // Step 1: Exchange code for short-lived token
         const tokenRes = await fetch(
-            `https://graph.facebook.com/${META_API_VERSION}/oauth/access_token?` +
+            `https://graph.facebook.com/${metaApiVersion}/oauth/access_token?` +
             `client_id=${appId}` +
             `&redirect_uri=${encodeURIComponent(redirectUri)}` +
             `&client_secret=${appSecret}` +
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
 
         // Step 2: Exchange for long-lived token
         const longLivedRes = await fetch(
-            `https://graph.facebook.com/${META_API_VERSION}/oauth/access_token?` +
+            `https://graph.facebook.com/${metaApiVersion}/oauth/access_token?` +
             `grant_type=fb_exchange_token` +
             `&client_id=${appId}` +
             `&client_secret=${appSecret}` +
@@ -69,13 +71,13 @@ export async function GET(request: NextRequest) {
 
         // Step 3: Fetch user info
         const meRes = await fetch(
-            `https://graph.facebook.com/${META_API_VERSION}/me?access_token=${accessToken}`
+            `https://graph.facebook.com/${metaApiVersion}/me?access_token=${accessToken}`
         );
         const meData = await meRes.json();
 
         // Step 4: Fetch ad accounts
         const adAccountsRes = await fetch(
-            `https://graph.facebook.com/${META_API_VERSION}/me/adaccounts?fields=name,account_id,account_status&access_token=${accessToken}`
+            `https://graph.facebook.com/${metaApiVersion}/me/adaccounts?fields=name,account_id,account_status&access_token=${accessToken}`
         );
         const adAccountsData = await adAccountsRes.json();
 

@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
-
-const META_API_VERSION = process.env.META_API_VERSION || "v21.0";
+import { getCTWASettings } from "@/lib/ctwa-settings";
 
 // ─── GET /api/ctwa/auth-url ──────────────────────────────────
 // Returns the Facebook OAuth authorization URL
 export async function GET() {
-    const appId = process.env.FACEBOOK_APP_ID;
-    const redirectUri = process.env.FACEBOOK_OAUTH_REDIRECT_URI;
+    const { facebookAppId, facebookOauthRedirectUri, metaApiVersion } =
+        await getCTWASettings();
 
-    if (!appId || !redirectUri) {
+    if (!facebookAppId || !facebookOauthRedirectUri) {
         return NextResponse.json(
-            { error: "FACEBOOK_APP_ID or FACEBOOK_OAUTH_REDIRECT_URI not configured" },
+            { error: "Facebook App ID or OAuth Redirect URI not configured. Set them in Settings → General." },
             { status: 500 }
         );
     }
@@ -21,9 +20,9 @@ export async function GET() {
         "business_management",
     ].join(",");
 
-    const url = `https://www.facebook.com/${META_API_VERSION}/dialog/oauth?` +
-        `client_id=${appId}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    const url = `https://www.facebook.com/${metaApiVersion}/dialog/oauth?` +
+        `client_id=${facebookAppId}` +
+        `&redirect_uri=${encodeURIComponent(facebookOauthRedirectUri)}` +
         `&scope=${encodeURIComponent(scopes)}` +
         `&response_type=code` +
         `&state=ctwa_connect`;

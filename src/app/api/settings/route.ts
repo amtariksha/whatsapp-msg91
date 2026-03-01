@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { invalidateCTWASettingsCache } from "@/lib/ctwa-settings";
 
 // ─── GET /api/settings ─────────────────────────────────────
 export async function GET() {
@@ -60,6 +61,9 @@ export async function PUT(request: NextRequest) {
             { status: 500 }
         );
     }
+
+    // Invalidate CTWA settings cache so API routes pick up new values
+    invalidateCTWASettingsCache();
 
     // Return updated settings
     const { data } = await supabaseAdmin

@@ -3,7 +3,7 @@
  * Sends conversion events (Lead, Purchase) back to Meta for ad attribution.
  */
 
-const META_API_VERSION = process.env.META_API_VERSION || "v21.0";
+import { getCTWASettings } from "@/lib/ctwa-settings";
 
 interface ConversionEvent {
     eventName: "Lead" | "Purchase";
@@ -19,6 +19,7 @@ export async function sendConversionEvent(
     datasetId: string,
     accessToken: string
 ): Promise<{ success: boolean; error?: string }> {
+    const { metaApiVersion } = await getCTWASettings();
     const payload = {
         data: [
             {
@@ -39,7 +40,7 @@ export async function sendConversionEvent(
         );
 
         const response = await fetch(
-            `https://graph.facebook.com/${META_API_VERSION}/${datasetId}/events?access_token=${accessToken}`,
+            `https://graph.facebook.com/${metaApiVersion}/${datasetId}/events?access_token=${accessToken}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
