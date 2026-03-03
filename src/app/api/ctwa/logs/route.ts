@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const campaign = searchParams.get("campaign");
+    const conversationId = searchParams.get("conversationId");
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
     const offset = (page - 1) * limit;
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
     }
     if (campaign) {
         query = query.eq("campaign_name", campaign);
+    }
+    if (conversationId) {
+        query = query.eq("conversation_id", conversationId);
     }
 
     const { data, count, error } = await query;

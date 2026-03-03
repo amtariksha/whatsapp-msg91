@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Phone, Tag, Plus, X, User, Pencil, Check, Trash2 } from "lucide-react";
+import { Mail, Phone, Tag, Plus, X, User, Pencil, Check, Trash2, Megaphone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -203,6 +203,22 @@ export function ContactDetails({ className }: { className?: string }) {
                         </p>
                     </div>
                 </div>
+
+                {conversation.source === "ctwa" && (
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-green-50">
+                            <Megaphone className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
+                                Source
+                            </p>
+                            <p className="text-sm text-green-700 font-medium">
+                                WhatsApp Ad
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <Separator />

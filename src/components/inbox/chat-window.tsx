@@ -19,6 +19,8 @@ import {
     Radio,
     Webhook,
     Phone as PhoneIcon,
+    Megaphone,
+    ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,12 +37,13 @@ import {
     useAssignConversation,
     useUsers,
     useVoiceCall,
+    useCTWALogForConversation,
 } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/components/auth-provider";
 import { MessageComposer } from "./message-composer";
 import { ReminderDialog } from "./reminder-dialog";
-import type { Message, MessageStatus, MessageSource } from "@/lib/types";
+import type { Message, MessageStatus, MessageSource, CTWALog } from "@/lib/types";
 import { SessionTimer } from "./session-timer";
 
 const SOURCE_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
@@ -64,6 +67,11 @@ const SOURCE_CONFIG: Record<string, { icon: React.ReactNode; label: string; colo
         label: "Broadcast Campaign",
         color: "text-orange-600",
     },
+    ctwa: {
+        icon: <Megaphone className="w-3 h-3" />,
+        label: "Click-to-WhatsApp Ad",
+        color: "text-green-600",
+    },
 };
 
 function SourceIcon({ source }: { source?: MessageSource }) {
@@ -74,6 +82,47 @@ function SourceIcon({ source }: { source?: MessageSource }) {
         <span title={config.label} className={`inline-flex items-center ${config.color}`}>
             {config.icon}
         </span>
+    );
+}
+
+function CTWAReferralBanner({ log }: { log: CTWALog }) {
+    return (
+        <div className="mx-4 mb-3 rounded-lg border border-green-200 bg-green-50/70 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-100/60 border-b border-green-200">
+                <Megaphone className="w-3.5 h-3.5 text-green-700" />
+                <span className="text-xs font-semibold text-green-800">
+                    From WhatsApp Ad
+                </span>
+                {log.campaignName && (
+                    <span className="text-xs text-green-600 ml-auto truncate max-w-[200px]">
+                        {log.campaignName}
+                    </span>
+                )}
+            </div>
+            <div className="px-3 py-2 space-y-1.5">
+                {log.headline && (
+                    <p className="text-sm font-medium text-slate-800">{log.headline}</p>
+                )}
+                {log.body && (
+                    <p className="text-xs text-slate-600 line-clamp-2">{log.body}</p>
+                )}
+                {log.mediaUrl && (
+                    <div className="rounded overflow-hidden border border-green-200 max-w-[200px]">
+                        <img src={log.mediaUrl} alt="Ad media" className="w-full h-auto max-h-32 object-cover" />
+                    </div>
+                )}
+                {log.sourceUrl && (
+                    <a
+                        href={log.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-green-700 hover:text-green-900 hover:underline"
+                    >
+                        View ad source <ExternalLink className="w-3 h-3" />
+                    </a>
+                )}
+            </div>
+        </div>
     );
 }
 
@@ -287,6 +336,10 @@ export function ChatWindow({ className }: { className?: string }) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [showAssignMenu, setShowAssignMenu] = useState(false);
     const [showReminderDialog, setShowReminderDialog] = useState(false);
+    const { data: ctwaLog } = useCTWALogForConversation(
+        activeConversationId,
+        conversation?.source
+    );
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {
@@ -556,6 +609,7 @@ export function ChatWindow({ className }: { className?: string }) {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-5 py-4" ref={scrollRef}>
+                {ctwaLog && <CTWAReferralBanner log={ctwaLog} />}
                 <div className="space-y-1">
                     {conversation.messages.map((msg) => (
                         <MessageBubble key={msg.id} message={msg} />
