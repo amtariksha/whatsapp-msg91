@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
     Facebook,
@@ -27,6 +27,14 @@ import * as api from "@/lib/api";
 type Tab = "connect" | "ads" | "logs" | "capi";
 
 export default function AdCampaignsPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}>
+            <AdCampaignsContent />
+        </Suspense>
+    );
+}
+
+function AdCampaignsContent() {
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<Tab>("connect");
     const [toast, setToast] = useState<string | null>(null);
