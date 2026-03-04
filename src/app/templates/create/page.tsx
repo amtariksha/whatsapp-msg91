@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
     ArrowLeft,
@@ -100,6 +100,14 @@ function renderPreviewBody(text: string) {
 
 // ─── Main Page Component ──────────────────────────────────────
 export default function CreateTemplatePage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-6 h-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" /></div>}>
+            <CreateTemplateContent />
+        </Suspense>
+    );
+}
+
+function CreateTemplateContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const editId = searchParams.get("edit");
