@@ -59,7 +59,7 @@ export function Sidebar() {
         setActiveNumber,
     } = useAppStore();
 
-    const isAdmin = user?.role === "admin";
+    const isAdmin = user?.role === "admin" || user?.role === "super_admin";
     const { data: balanceData } = useBalance();
 
     const allNavItems = [
