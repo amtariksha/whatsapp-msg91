@@ -4,7 +4,7 @@ import { getRequestContext } from "@/lib/request";
 
 // ─── POST /api/chat/send ──────────────────────────────────
 export async function POST(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const body = await request.json();
     const {
         to,
@@ -18,12 +18,16 @@ export async function POST(request: NextRequest) {
     const sendFromNumber = integratedNumber || process.env.MSG91_INTEGRATED_NUMBER || "919999999999";
 
     // ─── Fetch number config from DB (scoped to org) ─────────
-    const { data: numConfig } = await supabaseAdmin
+    let numQuery = supabaseAdmin
         .from("integrated_numbers")
         .select("*")
-        .eq("number", sendFromNumber)
-        .eq("org_id", orgId)
-        .single();
+        .eq("number", sendFromNumber);
+
+    if (!isSuperAdmin) {
+        numQuery = numQuery.eq("org_id", orgId);
+    }
+
+    const { data: numConfig } = await numQuery.single();
 
     // Default to msg91 if not found in db
     const provider = numConfig?.provider || "msg91";
@@ -298,14 +302,19 @@ export async function POST(request: NextRequest) {
 
     // ─── Update conversation's last_message ──────────────────
     if (conversationId) {
-        await supabaseAdmin
+        let convUpdate = supabaseAdmin
             .from("conversations")
             .update({
                 last_message: messageBody,
                 last_message_time: new Date().toISOString(),
             })
-            .eq("id", conversationId)
-            .eq("org_id", orgId);
+            .eq("id", conversationId);
+
+        if (!isSuperAdmin) {
+            convUpdate = convUpdate.eq("org_id", orgId);
+        }
+
+        await convUpdate;
     }
 
     // Return full message object for frontend

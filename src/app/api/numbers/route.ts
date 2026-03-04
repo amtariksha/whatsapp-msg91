@@ -9,13 +9,19 @@ import type { WhatsAppNumber } from "@/lib/types";
  * Fallback to MSG91_INTEGRATED_NUMBERS env var if the table is empty (for backward compatibility).
  */
 export async function GET(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     try {
-        const { data: dbNumbers, error } = await supabaseAdmin
+        let query = supabaseAdmin
             .from("integrated_numbers")
             .select("*")
-            .eq("org_id", orgId)
             .order("created_at", { ascending: true });
+
+        // Super admins see all numbers; regular users see only their org
+        if (!isSuperAdmin) {
+            query = query.eq("org_id", orgId);
+        }
+
+        const { data: dbNumbers, error } = await query;
 
         if (error) {
             console.error("Error fetching integrated_numbers from DB:", error);
@@ -34,6 +40,7 @@ export async function GET(request: NextRequest) {
                 metaWabaId: dbNum.meta_waba_id,
                 metaPhoneNumberId: dbNum.meta_phone_number_id,
                 metaAccessToken: dbNum.meta_access_token,
+                orgId: dbNum.org_id,
             }));
         } else {
             // Fallback to env var
@@ -65,10 +72,10 @@ export async function GET(request: NextRequest) {
  * Add a new integrated number.
  */
 export async function POST(req: NextRequest) {
-    const { orgId } = getRequestContext(req.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(req.headers);
     try {
         const body = await req.json();
-        const { number, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken } = body;
+        const { number, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken, orgId: targetOrgId } = body;
 
         if (!number) {
             return NextResponse.json({ error: "Phone number is required" }, { status: 400 });
@@ -76,10 +83,13 @@ export async function POST(req: NextRequest) {
 
         const cleanNumber = number.replace(/^\+/, "");
 
+        // Super admins can specify the target org; regular users always use their own org
+        const effectiveOrgId = isSuperAdmin && targetOrgId ? targetOrgId : orgId;
+
         const { data, error } = await supabaseAdmin
             .from("integrated_numbers")
             .insert([{
-                org_id: orgId,
+                org_id: effectiveOrgId,
                 number: cleanNumber,
                 label,
                 provider: provider || "msg91",
@@ -107,28 +117,39 @@ export async function POST(req: NextRequest) {
  * Update an integrated number.
  */
 export async function PATCH(req: NextRequest) {
-    const { orgId } = getRequestContext(req.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(req.headers);
     try {
         const body = await req.json();
-        const { id, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken } = body;
+        const { id, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken, orgId: newOrgId } = body;
 
         if (!id) {
             return NextResponse.json({ error: "Number ID is required" }, { status: 400 });
         }
 
-        const { data, error } = await supabaseAdmin
+        const updateData: Record<string, unknown> = {
+            label,
+            provider,
+            meta_waba_id: metaWabaId,
+            meta_phone_number_id: metaPhoneNumberId,
+            meta_access_token: metaAccessToken,
+        };
+
+        // Super admins can reassign a number to a different org
+        if (isSuperAdmin && newOrgId) {
+            updateData.org_id = newOrgId;
+        }
+
+        let query = supabaseAdmin
             .from("integrated_numbers")
-            .update({
-                label,
-                provider,
-                meta_waba_id: metaWabaId,
-                meta_phone_number_id: metaPhoneNumberId,
-                meta_access_token: metaAccessToken,
-            })
-            .eq("id", id)
-            .eq("org_id", orgId)
-            .select()
-            .single();
+            .update(updateData)
+            .eq("id", id);
+
+        // Regular users can only update their own org's numbers
+        if (!isSuperAdmin) {
+            query = query.eq("org_id", orgId);
+        }
+
+        const { data, error } = await query.select().single();
 
         if (error) {
             console.error("Error updating integrated_number:", error);
@@ -147,7 +168,7 @@ export async function PATCH(req: NextRequest) {
  * Delete an integrated number.
  */
 export async function DELETE(req: NextRequest) {
-    const { orgId } = getRequestContext(req.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(req.headers);
     try {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get("id");
@@ -156,15 +177,28 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Number ID is required" }, { status: 400 });
         }
 
-        const { error } = await supabaseAdmin
+        let query = supabaseAdmin
             .from("integrated_numbers")
             .delete()
-            .eq("id", id)
-            .eq("org_id", orgId);
+            .eq("id", id);
+
+        // Regular users can only delete their own org's numbers
+        if (!isSuperAdmin) {
+            query = query.eq("org_id", orgId);
+        }
+
+        const { error, count } = await query.select().then(res => ({
+            error: res.error,
+            count: res.data?.length ?? 0,
+        }));
 
         if (error) {
             console.error("Error deleting integrated_number:", error);
             return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        if (count === 0) {
+            return NextResponse.json({ error: "Number not found or access denied" }, { status: 404 });
         }
 
         return NextResponse.json({ success: true });

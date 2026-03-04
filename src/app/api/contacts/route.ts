@@ -16,7 +16,7 @@ function mapContact(row: Record<string, unknown>) {
 
 // ─── GET /api/contacts ─────────────────────────────────────
 export async function GET(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase();
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -27,9 +27,12 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
         .from("contacts")
         .select("*", { count: "exact" })
-        .eq("org_id", orgId)
         .order("created_at", { ascending: false })
         .range(from, to);
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
 
     if (search) {
         query = query.or(
@@ -54,13 +57,15 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/contacts ────────────────────────────────────
 export async function POST(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const body = await request.json();
+
+    const effectiveOrgId = isSuperAdmin && body.orgId ? body.orgId : orgId;
 
     const { data, error } = await supabaseAdmin
         .from("contacts")
         .insert({
-            org_id: orgId,
+            org_id: effectiveOrgId,
             name: body.name || "Unknown",
             phone: body.phone,
             email: body.email || null,

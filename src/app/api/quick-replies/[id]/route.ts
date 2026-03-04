@@ -7,7 +7,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
@@ -16,13 +16,16 @@ export async function PATCH(
     if (body.body !== undefined) updateData.body = body.body;
     if (body.shortcut !== undefined) updateData.shortcut = body.shortcut;
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("quick_replies")
         .update(updateData)
-        .eq("id", id)
-        .eq("org_id", orgId)
-        .select()
-        .single();
+        .eq("id", id);
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query.select().single();
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -42,14 +45,19 @@ export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const { id } = await params;
 
-    const { error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("quick_replies")
         .delete()
-        .eq("id", id)
-        .eq("org_id", orgId);
+        .eq("id", id);
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { error } = await query;
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });

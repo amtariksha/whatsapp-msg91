@@ -4,13 +4,18 @@ import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/templates/local ───────────────────────────────
 export async function GET(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("templates_local")
         .select("*")
-        .eq("org_id", orgId)
         .order("created_at", { ascending: false });
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
         console.error("Fetch local templates error:", error);
@@ -39,13 +44,15 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/templates/local ──────────────────────────────
 export async function POST(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const body = await request.json();
+
+    const effectiveOrgId = isSuperAdmin && body.orgId ? body.orgId : orgId;
 
     const { data, error } = await supabaseAdmin
         .from("templates_local")
         .insert({
-            org_id: orgId,
+            org_id: effectiveOrgId,
             name: body.name,
             category: body.category || "MARKETING",
             language: body.language || "en",

@@ -20,15 +20,19 @@ export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const { id } = await params;
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("contacts")
         .select("*")
-        .eq("id", id)
-        .eq("org_id", orgId)
-        .single();
+        .eq("id", id);
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query.single();
 
     if (error || !data) {
         return NextResponse.json({ error: "Contact not found" }, { status: 404 });
@@ -42,19 +46,19 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
     // Fetch current tags before update for CAPI diff
     let oldTags: string[] = [];
     if (body.tags) {
-        const { data: currentContact } = await supabaseAdmin
+        let tagQuery = supabaseAdmin
             .from("contacts")
             .select("tags")
-            .eq("id", id)
-            .eq("org_id", orgId)
-            .single();
+            .eq("id", id);
+        if (!isSuperAdmin) tagQuery = tagQuery.eq("org_id", orgId);
+        const { data: currentContact } = await tagQuery.single();
         oldTags = (currentContact?.tags as string[]) || [];
     }
 
@@ -64,13 +68,16 @@ export async function PATCH(
     if (body.email !== undefined) updateData.email = body.email;
     if (body.customFields !== undefined) updateData.custom_fields = body.customFields;
 
-    const { data, error } = await supabaseAdmin
+    let updateQuery = supabaseAdmin
         .from("contacts")
         .update(updateData)
-        .eq("id", id)
-        .eq("org_id", orgId)
-        .select()
-        .single();
+        .eq("id", id);
+
+    if (!isSuperAdmin) {
+        updateQuery = updateQuery.eq("org_id", orgId);
+    }
+
+    const { data, error } = await updateQuery.select().single();
 
     if (error || !data) {
         return NextResponse.json(

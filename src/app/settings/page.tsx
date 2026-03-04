@@ -999,12 +999,17 @@ function QuickRepliesTab() {
 
 // ─── Numbers Tab ───────────────────────────────────────────
 function NumbersTab() {
+    const { user: currentUser } = useAuth();
+    const isSuperAdmin = currentUser?.role === "super_admin";
     const [numbers, setNumbers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [showMetaSignup, setShowMetaSignup] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [autoDetectResult, setAutoDetectResult] = useState<string | null>(null);
+
+    // Org list for super_admin
+    const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
 
     // Form fields
     const [number, setNumber] = useState("");
@@ -1013,6 +1018,7 @@ function NumbersTab() {
     const [metaWabaId, setMetaWabaId] = useState("");
     const [metaPhoneNumberId, setMetaPhoneNumberId] = useState("");
     const [metaAccessToken, setMetaAccessToken] = useState("");
+    const [selectedOrgId, setSelectedOrgId] = useState("");
     const [saving, setSaving] = useState(false);
 
     const fetchMsg91 = useFetchMsg91Numbers();
@@ -1028,7 +1034,28 @@ function NumbersTab() {
         }
     };
 
+    const fetchOrgs = async () => {
+        try {
+            const res = await fetch("/api/organizations");
+            if (res.ok) {
+                const data = await res.json();
+                setOrgs(data);
+                if (data.length > 0 && !selectedOrgId) {
+                    setSelectedOrgId(data[0].id);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch orgs:", e);
+        }
+    };
+
     useEffect(() => { fetchNumbers(); }, []);
+    useEffect(() => { if (isSuperAdmin) fetchOrgs(); }, [isSuperAdmin]);
+
+    const getOrgName = (orgId: string) => {
+        const org = orgs.find((o) => o.id === orgId);
+        return org?.name || "Unknown";
+    };
 
     const resetForm = () => {
         setShowForm(false);
@@ -1039,13 +1066,14 @@ function NumbersTab() {
         setMetaWabaId("");
         setMetaPhoneNumberId("");
         setMetaAccessToken("");
+        setSelectedOrgId(orgs.length > 0 ? orgs[0].id : "");
     };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
         try {
-            const payload = {
+            const payload: Record<string, unknown> = {
                 id: editId || undefined,
                 number,
                 label,
@@ -1055,12 +1083,24 @@ function NumbersTab() {
                 metaAccessToken: provider === "meta" ? metaAccessToken : undefined,
             };
 
+            // Super admin can assign number to a specific org
+            if (isSuperAdmin && selectedOrgId) {
+                payload.orgId = selectedOrgId;
+            }
+
             const method = editId ? "PATCH" : "POST";
-            await fetch("/api/numbers", {
+            const res = await fetch("/api/numbers", {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
+
+            if (!res.ok) {
+                const err = await res.json();
+                alert(`Failed to save: ${err.error || "Unknown error"}`);
+                return;
+            }
+
             resetForm();
             fetchNumbers();
         } finally {
@@ -1076,13 +1116,23 @@ function NumbersTab() {
         setMetaWabaId(num.metaWabaId || "");
         setMetaPhoneNumberId(num.metaPhoneNumberId || "");
         setMetaAccessToken(num.metaAccessToken || "");
+        if (num.orgId) setSelectedOrgId(num.orgId);
         setShowForm(true);
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm("Remove this number? This might break sending messages from this number until replaced.")) return;
-        await fetch(`/api/numbers?id=${id}`, { method: "DELETE" });
-        fetchNumbers();
+        try {
+            const res = await fetch(`/api/numbers?id=${id}`, { method: "DELETE" });
+            if (!res.ok) {
+                const err = await res.json();
+                alert(`Failed to delete: ${err.error || "Unknown error"}`);
+                return;
+            }
+            fetchNumbers();
+        } catch (e) {
+            alert("Failed to delete number. Please try again.");
+        }
     };
 
     return (
@@ -1167,6 +1217,22 @@ function NumbersTab() {
                         {editId ? "Edit Number Configuration" : "Add Number Configuration"}
                     </h3>
                     <form onSubmit={handleSave} className="space-y-4">
+                        {isSuperAdmin && orgs.length > 0 && (
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Organization</label>
+                                <select
+                                    value={selectedOrgId}
+                                    onChange={(e) => setSelectedOrgId(e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                                    required
+                                >
+                                    {orgs.map((org) => (
+                                        <option key={org.id} value={org.id}>{org.name}</option>
+                                    ))}
+                                </select>
+                                <p className="text-[10px] text-slate-400 mt-1">Assign this number to an organization</p>
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
@@ -1177,7 +1243,7 @@ function NumbersTab() {
                                     placeholder="e.g. 919876543210 (include country code)"
                                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                                     required
-                                    disabled={!!editId} // Don't allow changing the number value deeply after creation easily
+                                    disabled={!!editId}
                                 />
                                 {editId && <p className="text-[10px] text-slate-400 mt-1">Number cannot be edited after creation. Create a new one instead.</p>}
                             </div>
@@ -1303,6 +1369,12 @@ function NumbersTab() {
                                         {num.isDefault && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Default</span>}
                                     </h4>
                                     <p className="text-xs text-slate-500 font-medium mt-0.5">{num.label}</p>
+                                    {isSuperAdmin && num.orgId && (
+                                        <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                            <Building2 className="w-3 h-3" />
+                                            {getOrgName(num.orgId)}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${num.provider === 'meta' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>

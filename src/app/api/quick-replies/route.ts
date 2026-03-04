@@ -4,13 +4,18 @@ import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/quick-replies ─────────────────────────────────
 export async function GET(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("quick_replies")
         .select("*")
-        .eq("org_id", orgId)
         .order("created_at", { ascending: false });
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
         console.error("Fetch quick replies error:", error);
@@ -31,8 +36,10 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/quick-replies ────────────────────────────────
 export async function POST(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const body = await request.json();
+
+    const effectiveOrgId = isSuperAdmin && body.orgId ? body.orgId : orgId;
 
     const { data, error } = await supabaseAdmin
         .from("quick_replies")
@@ -40,7 +47,7 @@ export async function POST(request: NextRequest) {
             title: body.title,
             body: body.body,
             shortcut: body.shortcut || null,
-            org_id: orgId,
+            org_id: effectiveOrgId,
         })
         .select()
         .single();

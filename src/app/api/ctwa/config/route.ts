@@ -5,14 +5,17 @@ import { getRequestContext } from "@/lib/request";
 // ─── GET /api/ctwa/config ────────────────────────────────────
 // Returns the current CTWA configuration (Facebook connection status)
 export async function GET(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("ctwa_config")
-        .select("*")
-        .eq("org_id", orgId)
-        .limit(1)
-        .maybeSingle();
+        .select("*");
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
 
     if (error) {
         console.error("[CTWA Config] Fetch error:", error);
@@ -41,16 +44,19 @@ export async function GET(request: NextRequest) {
 // ─── PUT /api/ctwa/config ────────────────────────────────────
 // Update CTWA configuration (ad account, CAPI settings)
 export async function PUT(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const body = await request.json();
 
     // Get existing config
-    const { data: existing } = await supabaseAdmin
+    let existQuery = supabaseAdmin
         .from("ctwa_config")
-        .select("id")
-        .eq("org_id", orgId)
-        .limit(1)
-        .maybeSingle();
+        .select("id");
+
+    if (!isSuperAdmin) {
+        existQuery = existQuery.eq("org_id", orgId);
+    }
+
+    const { data: existing } = await existQuery.limit(1).maybeSingle();
 
     if (!existing) {
         return NextResponse.json(

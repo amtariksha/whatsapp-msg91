@@ -35,16 +35,20 @@ export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const { id } = await params;
 
     // Fetch conversation with contact and assigned user
-    const { data: conv, error: convError } = await supabaseAdmin
+    let convQuery = supabaseAdmin
         .from("conversations")
         .select("*, contacts(*)")
-        .eq("id", id)
-        .eq("org_id", orgId)
-        .single();
+        .eq("id", id);
+
+    if (!isSuperAdmin) {
+        convQuery = convQuery.eq("org_id", orgId);
+    }
+
+    const { data: conv, error: convError } = await convQuery.single();
 
     if (convError || !conv) {
         return NextResponse.json(
@@ -105,7 +109,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
@@ -119,11 +123,16 @@ export async function PATCH(
         updateData.assigned_at = body.assigned_to ? new Date().toISOString() : null;
     }
 
-    const { data, error } = await supabaseAdmin
+    let updateQuery = supabaseAdmin
         .from("conversations")
         .update(updateData)
-        .eq("id", id)
-        .eq("org_id", orgId)
+        .eq("id", id);
+
+    if (!isSuperAdmin) {
+        updateQuery = updateQuery.eq("org_id", orgId);
+    }
+
+    const { data, error } = await updateQuery
         .select("*, contacts(*)")
         .single();
 

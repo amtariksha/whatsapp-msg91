@@ -5,7 +5,9 @@ import { getRequestContext } from "@/lib/request";
 // ─── POST /api/numbers/fetch-msg91 ────────────────────────
 // Auto-detect WhatsApp numbers from MSG91 account and import them
 export async function POST(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
+    // For auto-detect, super_admin imports to their own org (can reassign later)
+    const targetOrgId = orgId;
     const authKey = process.env.MSG91_AUTH_KEY;
     if (!authKey) {
         return NextResponse.json(

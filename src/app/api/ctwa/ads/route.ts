@@ -6,13 +6,18 @@ import { getRequestContext } from "@/lib/request";
 // ─── GET /api/ctwa/ads ───────────────────────────────────────
 // Returns synced CTWA ads/campaigns from DB
 export async function GET(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("ctwa_ads")
         .select("*")
-        .eq("org_id", orgId)
         .order("synced_at", { ascending: false });
+
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -42,15 +47,18 @@ export async function GET(request: NextRequest) {
 // ─── POST /api/ctwa/ads ──────────────────────────────────────
 // Sync campaigns from Meta Marketing API
 export async function POST(request: NextRequest) {
-    const { orgId } = getRequestContext(request.headers);
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
 
     // Get CTWA config
-    const { data: config } = await supabaseAdmin
+    let configQuery = supabaseAdmin
         .from("ctwa_config")
-        .select("*")
-        .eq("org_id", orgId)
-        .limit(1)
-        .maybeSingle();
+        .select("*");
+
+    if (!isSuperAdmin) {
+        configQuery = configQuery.eq("org_id", orgId);
+    }
+
+    const { data: config } = await configQuery.limit(1).maybeSingle();
 
     if (!config) {
         return NextResponse.json(
