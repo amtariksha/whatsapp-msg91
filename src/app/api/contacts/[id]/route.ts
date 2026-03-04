@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendConversionEvent } from "@/lib/capi";
+import { getRequestContext } from "@/lib/request";
 
 function mapContact(row: Record<string, unknown>) {
     return {
@@ -16,15 +17,17 @@ function mapContact(row: Record<string, unknown>) {
 
 // ─── GET /api/contacts/[id] ───────────────────────────────
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
     const { data, error } = await supabaseAdmin
         .from("contacts")
         .select("*")
         .eq("id", id)
+        .eq("org_id", orgId)
         .single();
 
     if (error || !data) {
@@ -39,6 +42,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
@@ -49,6 +53,7 @@ export async function PATCH(
             .from("contacts")
             .select("tags")
             .eq("id", id)
+            .eq("org_id", orgId)
             .single();
         oldTags = (currentContact?.tags as string[]) || [];
     }
@@ -63,6 +68,7 @@ export async function PATCH(
         .from("contacts")
         .update(updateData)
         .eq("id", id)
+        .eq("org_id", orgId)
         .select()
         .single();
 

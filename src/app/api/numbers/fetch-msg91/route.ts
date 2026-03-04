@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── POST /api/numbers/fetch-msg91 ────────────────────────
 // Auto-detect WhatsApp numbers from MSG91 account and import them
-export async function POST() {
+export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const authKey = process.env.MSG91_AUTH_KEY;
     if (!authKey) {
         return NextResponse.json(
@@ -89,10 +91,11 @@ export async function POST() {
             return { phone, name };
         }).filter((n: { phone: string }) => n.phone.length > 0);
 
-        // Get existing numbers to avoid duplicates
+        // Get existing numbers to avoid duplicates (scoped to org)
         const { data: existingNumbers } = await supabaseAdmin
             .from("integrated_numbers")
-            .select("number");
+            .select("number")
+            .eq("org_id", orgId);
 
         const existingSet = new Set(
             (existingNumbers || []).map((n) => n.number)
@@ -106,6 +109,7 @@ export async function POST() {
             const { error } = await supabaseAdmin
                 .from("integrated_numbers")
                 .insert({
+                    org_id: orgId,
                     number: num.phone,
                     label: num.name || `MSG91 ${num.phone.slice(-4)}`,
                     provider: "msg91",

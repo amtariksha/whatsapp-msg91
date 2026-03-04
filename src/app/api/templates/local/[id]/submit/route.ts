@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 /**
  * Extract named variables from body text and map them to numbered {{1}}, {{2}}, etc.
@@ -32,9 +33,10 @@ function mapNamedToNumberedVariables(body: string): { numberedBody: string; vari
 // ─── POST /api/templates/local/[id]/submit ───────────────────
 // Submit a local template to MSG91 for WhatsApp/Facebook approval
 export async function POST(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
     const authKey = process.env.MSG91_AUTH_KEY;
@@ -50,6 +52,7 @@ export async function POST(
     const { data: dbNumbers } = await supabaseAdmin
         .from("integrated_numbers")
         .select("number")
+        .eq("org_id", orgId)
         .eq("active", true)
         .limit(1)
         .maybeSingle();
@@ -69,6 +72,7 @@ export async function POST(
         .from("templates_local")
         .select("*")
         .eq("id", id)
+        .eq("org_id", orgId)
         .single();
 
     if (fetchError || !template) {
@@ -260,7 +264,8 @@ export async function POST(
                 msg91_template_id: msg91TemplateId,
                 updated_at: new Date().toISOString(),
             })
-            .eq("id", id);
+            .eq("id", id)
+            .eq("org_id", orgId);
 
         if (updateError) {
             console.error("[Template Submit] DB update error:", updateError);

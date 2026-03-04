@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/quick-replies ─────────────────────────────────
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
+
     const { data, error } = await supabaseAdmin
         .from("quick_replies")
         .select("*")
+        .eq("org_id", orgId)
         .order("created_at", { ascending: false });
 
     if (error) {
@@ -27,6 +31,7 @@ export async function GET() {
 
 // ─── POST /api/quick-replies ────────────────────────────────
 export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const body = await request.json();
 
     const { data, error } = await supabaseAdmin
@@ -35,6 +40,7 @@ export async function POST(request: NextRequest) {
             title: body.title,
             body: body.body,
             shortcut: body.shortcut || null,
+            org_id: orgId,
         })
         .select()
         .single();

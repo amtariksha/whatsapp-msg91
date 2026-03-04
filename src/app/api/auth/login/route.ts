@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         role: user.role,
         name: user.name,
+        orgId: user.org_id || "",
     });
 
     // Set httpOnly cookie
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
             name: user.name,
             email: user.email,
             role: user.role,
+            orgId: user.org_id || "",
         },
     });
 

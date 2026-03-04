@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── Supabase row → app Contact type mapper ───────────────
 function mapContact(row: Record<string, unknown>) {
@@ -45,6 +46,7 @@ function mapConversation(row: Record<string, unknown>) {
 
 // ─── GET /api/conversations ────────────────────────────────
 export async function GET(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const search = searchParams.get("search")?.toLowerCase();
@@ -52,6 +54,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
         .from("conversations")
         .select("*, contacts(*)")
+        .eq("org_id", orgId)
         .order("last_message_time", { ascending: false });
 
     if (status && status !== "all") {
@@ -85,11 +88,13 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/conversations ───────────────────────────────
 export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const body = await request.json();
 
     const { data, error } = await supabaseAdmin
         .from("conversations")
         .insert({
+            org_id: orgId,
             contact_id: body.contactId,
             integrated_number: body.integratedNumber || "919999999999",
             status: "open",

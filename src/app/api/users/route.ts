@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { hashPassword } from "@/lib/auth";
+import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/users — List all users (admin only) ─────────
 export async function GET(request: NextRequest) {
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
+
     const role = request.headers.get("x-user-role");
-    if (role !== "admin") {
+    if (role !== "admin" && !isSuperAdmin) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("users")
-        .select("id, name, email, role, is_active, created_at")
+        .select("id, name, email, role, org_id, is_active, created_at")
         .order("created_at", { ascending: true });
+
+    // Super admins can see all users; regular admins see only their org
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
         console.error("Users fetch error:", error);
@@ -24,12 +34,14 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/users — Create new user (admin only) ───────
 export async function POST(request: NextRequest) {
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
+
     const role = request.headers.get("x-user-role");
-    if (role !== "admin") {
+    if (role !== "admin" && !isSuperAdmin) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
-    const { name, email, password, userRole } = await request.json();
+    const { name, email, password, userRole, org_id: targetOrgId } = await request.json();
 
     if (!name || !email || !password) {
         return NextResponse.json(
@@ -37,6 +49,9 @@ export async function POST(request: NextRequest) {
             { status: 400 }
         );
     }
+
+    // Super admins can specify the target org; regular admins always use their own org
+    const effectiveOrgId = isSuperAdmin && targetOrgId ? targetOrgId : orgId;
 
     // Check duplicate email
     const { data: existing } = await supabaseAdmin
@@ -57,13 +72,14 @@ export async function POST(request: NextRequest) {
     const { data: user, error } = await supabaseAdmin
         .from("users")
         .insert({
+            org_id: effectiveOrgId,
             name,
             email: email.toLowerCase().trim(),
             password_hash: passwordHash,
             role: userRole || "agent",
             is_active: true,
         })
-        .select("id, name, email, role, is_active, created_at")
+        .select("id, name, email, role, org_id, is_active, created_at")
         .single();
 
     if (error) {

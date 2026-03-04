@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── POST /api/payments/[id]/sync ─────────────────────────────
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
     // 1. Fetch payment from DB
@@ -13,6 +15,7 @@ export async function POST(
         .from("payments")
         .select("*")
         .eq("id", id)
+        .eq("org_id", orgId)
         .single();
 
     if (error || !payment) {
@@ -72,7 +75,8 @@ export async function POST(
             await supabaseAdmin
                 .from("payments")
                 .update(updateData)
-                .eq("id", id);
+                .eq("id", id)
+                .eq("org_id", orgId);
         }
 
         return NextResponse.json({

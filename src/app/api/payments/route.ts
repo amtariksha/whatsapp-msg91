@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getAppSetting } from "@/lib/settings";
+import { getRequestContext } from "@/lib/request";
 
 function mapPayment(row: Record<string, unknown>) {
     return {
@@ -27,6 +28,7 @@ function mapPayment(row: Record<string, unknown>) {
 
 // ─── GET /api/payments ─────────────────────────────────────
 export async function GET(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const from = searchParams.get("from");
@@ -37,6 +39,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
         .from("payments")
         .select("*", { count: "exact" })
+        .eq("org_id", orgId)
         .order("created_at", { ascending: false });
 
     if (status && status !== "all") {
@@ -103,6 +106,7 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/payments ────────────────────────────────────
 export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const body = await request.json();
     const {
         contactName,
@@ -180,6 +184,7 @@ export async function POST(request: NextRequest) {
             payment_status: "created",
             created_by: integratedNumber ? "Sales" : "Sales",
             integrated_number: integratedNumber || null,
+            org_id: orgId,
         })
         .select()
         .single();

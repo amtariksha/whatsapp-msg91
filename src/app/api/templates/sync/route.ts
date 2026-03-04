@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getRequestContext } from "@/lib/request";
 
 // ─── POST /api/templates/sync ───────────────────────────────
 // Sync templates with MSG91 / Meta
-export async function POST() {
+export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const authKey = process.env.MSG91_AUTH_KEY;
     if (!authKey) {
         return NextResponse.json(

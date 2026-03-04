@@ -15,7 +15,7 @@ function isPublic(pathname: string): boolean {
     return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Allow public routes
@@ -56,6 +56,7 @@ export async function middleware(request: NextRequest) {
     res.headers.set("x-user-email", payload.email);
     res.headers.set("x-user-role", payload.role);
     res.headers.set("x-user-name", payload.name);
+    res.headers.set("x-user-org-id", payload.orgId || "");
 
     return res;
 }

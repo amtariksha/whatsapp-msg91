@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 import type { WhatsAppNumber } from "@/lib/types";
 
 /**
@@ -7,11 +8,13 @@ import type { WhatsAppNumber } from "@/lib/types";
  * Fetch configured numbers from the database. 
  * Fallback to MSG91_INTEGRATED_NUMBERS env var if the table is empty (for backward compatibility).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     try {
         const { data: dbNumbers, error } = await supabaseAdmin
             .from("integrated_numbers")
             .select("*")
+            .eq("org_id", orgId)
             .order("created_at", { ascending: true });
 
         if (error) {
@@ -62,6 +65,7 @@ export async function GET() {
  * Add a new integrated number.
  */
 export async function POST(req: NextRequest) {
+    const { orgId } = getRequestContext(req.headers);
     try {
         const body = await req.json();
         const { number, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken } = body;
@@ -75,6 +79,7 @@ export async function POST(req: NextRequest) {
         const { data, error } = await supabaseAdmin
             .from("integrated_numbers")
             .insert([{
+                org_id: orgId,
                 number: cleanNumber,
                 label,
                 provider: provider || "msg91",
@@ -102,6 +107,7 @@ export async function POST(req: NextRequest) {
  * Update an integrated number.
  */
 export async function PATCH(req: NextRequest) {
+    const { orgId } = getRequestContext(req.headers);
     try {
         const body = await req.json();
         const { id, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken } = body;
@@ -120,6 +126,7 @@ export async function PATCH(req: NextRequest) {
                 meta_access_token: metaAccessToken,
             })
             .eq("id", id)
+            .eq("org_id", orgId)
             .select()
             .single();
 
@@ -140,6 +147,7 @@ export async function PATCH(req: NextRequest) {
  * Delete an integrated number.
  */
 export async function DELETE(req: NextRequest) {
+    const { orgId } = getRequestContext(req.headers);
     try {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get("id");
@@ -151,7 +159,8 @@ export async function DELETE(req: NextRequest) {
         const { error } = await supabaseAdmin
             .from("integrated_numbers")
             .delete()
-            .eq("id", id);
+            .eq("id", id)
+            .eq("org_id", orgId);
 
         if (error) {
             console.error("Error deleting integrated_number:", error);

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/ctwa/config ────────────────────────────────────
 // Returns the current CTWA configuration (Facebook connection status)
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
+
     const { data, error } = await supabaseAdmin
         .from("ctwa_config")
         .select("*")
+        .eq("org_id", orgId)
         .limit(1)
         .maybeSingle();
 
@@ -37,12 +41,14 @@ export async function GET() {
 // ─── PUT /api/ctwa/config ────────────────────────────────────
 // Update CTWA configuration (ad account, CAPI settings)
 export async function PUT(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const body = await request.json();
 
     // Get existing config
     const { data: existing } = await supabaseAdmin
         .from("ctwa_config")
         .select("id")
+        .eq("org_id", orgId)
         .limit(1)
         .maybeSingle();
 

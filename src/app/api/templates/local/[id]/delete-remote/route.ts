@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── DELETE /api/templates/local/[id]/delete-remote ───────────
 // Delete a template from MSG91 and remove local record
 export async function DELETE(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
     const authKey = process.env.MSG91_AUTH_KEY;
@@ -22,6 +24,7 @@ export async function DELETE(
     const { data: dbNumbers } = await supabaseAdmin
         .from("integrated_numbers")
         .select("number")
+        .eq("org_id", orgId)
         .eq("active", true)
         .limit(1)
         .maybeSingle();
@@ -41,6 +44,7 @@ export async function DELETE(
         .from("templates_local")
         .select("*")
         .eq("id", id)
+        .eq("org_id", orgId)
         .single();
 
     if (fetchError || !template) {
@@ -84,7 +88,8 @@ export async function DELETE(
     const { error: deleteError } = await supabaseAdmin
         .from("templates_local")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("org_id", orgId);
 
     if (deleteError) {
         return NextResponse.json({ error: deleteError.message }, { status: 500 });

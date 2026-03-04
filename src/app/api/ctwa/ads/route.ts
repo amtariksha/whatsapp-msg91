@@ -1,13 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getCTWASettings } from "@/lib/ctwa-settings";
+import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/ctwa/ads ───────────────────────────────────────
 // Returns synced CTWA ads/campaigns from DB
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
+
     const { data, error } = await supabaseAdmin
         .from("ctwa_ads")
         .select("*")
+        .eq("org_id", orgId)
         .order("synced_at", { ascending: false });
 
     if (error) {
@@ -37,11 +41,14 @@ export async function GET() {
 
 // ─── POST /api/ctwa/ads ──────────────────────────────────────
 // Sync campaigns from Meta Marketing API
-export async function POST() {
+export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
+
     // Get CTWA config
     const { data: config } = await supabaseAdmin
         .from("ctwa_config")
         .select("*")
+        .eq("org_id", orgId)
         .limit(1)
         .maybeSingle();
 
@@ -106,6 +113,7 @@ export async function POST() {
             const { count: leadCount } = await supabaseAdmin
                 .from("ctwa_logs")
                 .select("id", { count: "exact", head: true })
+                .eq("org_id", orgId)
                 .eq("campaign_name", campaign.name);
 
             // Upsert campaign
@@ -113,6 +121,7 @@ export async function POST() {
                 .from("ctwa_ads")
                 .upsert(
                     {
+                        org_id: orgId,
                         ad_account_id: config.ad_account_id,
                         campaign_id: campaign.id,
                         campaign_name: campaign.name,

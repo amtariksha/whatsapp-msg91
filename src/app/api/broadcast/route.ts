@@ -1,11 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 const MSG91_AUTH_KEY = process.env.MSG91_AUTH_KEY || "";
 const MSG91_API_BASE_URL = "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
+        const { orgId } = getRequestContext(request.headers);
         const body = await request.json();
         const { templateId, variables, recipients, integratedNumber } = body;
 

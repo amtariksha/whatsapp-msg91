@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── POST /api/chat/send ──────────────────────────────────
 export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const body = await request.json();
     const {
         to,
@@ -15,11 +17,12 @@ export async function POST(request: NextRequest) {
     const phone = to.replace(/^\+/, "");
     const sendFromNumber = integratedNumber || process.env.MSG91_INTEGRATED_NUMBER || "919999999999";
 
-    // ─── Fetch number config from DB ───────────────────────
+    // ─── Fetch number config from DB (scoped to org) ─────────
     const { data: numConfig } = await supabaseAdmin
         .from("integrated_numbers")
         .select("*")
         .eq("number", sendFromNumber)
+        .eq("org_id", orgId)
         .single();
 
     // Default to msg91 if not found in db
@@ -301,7 +304,8 @@ export async function POST(request: NextRequest) {
                 last_message: messageBody,
                 last_message_time: new Date().toISOString(),
             })
-            .eq("id", conversationId);
+            .eq("id", conversationId)
+            .eq("org_id", orgId);
     }
 
     // Return full message object for frontend

@@ -1,3 +1,12 @@
+// ─── Organization ─────────────────────────────────────────
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── WhatsApp Number ───────────────────────────────────────
 export interface WhatsAppNumber {
   id: string;
@@ -353,6 +362,7 @@ export interface AppUser {
   id: string;
   name: string;
   email: string;
-  role: string;
+  role: "super_admin" | "admin" | "agent";
   isActive: boolean;
+  orgId: string;
 }

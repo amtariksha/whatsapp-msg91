@@ -17,9 +17,11 @@ import {
     Download,
     Wallet,
     RefreshCw,
+    Building2,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useSettings, useUpdateSettings, useFetchMsg91Numbers, useBalance } from "@/lib/hooks";
+import { MetaEmbeddedSignup } from "@/components/meta-embedded-signup";
 
 interface UserRecord {
     id: string;
@@ -45,7 +47,7 @@ export default function SettingsPage() {
     const [error, setError] = useState("");
 
     // ─── Settings tab ───────────────────────────────────────
-    const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers" | "general">("users");
+    const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers" | "general" | "organizations">("users");
 
     // ─── Reset password dialog ─────────────────────────────
     const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -138,7 +140,7 @@ export default function SettingsPage() {
         setNewPassword("");
     };
 
-    if (currentUser?.role !== "admin") {
+    if (currentUser?.role !== "admin" && currentUser?.role !== "super_admin") {
         return (
             <div className="flex items-center justify-center h-full">
                 <div className="text-center">
@@ -210,6 +212,18 @@ export default function SettingsPage() {
                     <SlidersHorizontal className="w-4 h-4 inline mr-2" />
                     General
                 </button>
+                {currentUser?.role === "super_admin" && (
+                    <button
+                        onClick={() => setActiveTab("organizations")}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "organizations"
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "text-slate-500 hover:text-slate-700"
+                            }`}
+                    >
+                        <Building2 className="w-4 h-4 inline mr-2" />
+                        Organizations
+                    </button>
+                )}
             </div>
 
             {activeTab === "users" && (
@@ -502,6 +516,10 @@ export default function SettingsPage() {
 
             {activeTab === "general" && (
                 <GeneralSettingsTab />
+            )}
+
+            {activeTab === "organizations" && (
+                <OrganizationsTab />
             )}
         </div>
     );
@@ -984,6 +1002,7 @@ function NumbersTab() {
     const [numbers, setNumbers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [showMetaSignup, setShowMetaSignup] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [autoDetectResult, setAutoDetectResult] = useState<string | null>(null);
 
@@ -1099,7 +1118,14 @@ function NumbersTab() {
                         Auto-detect from MSG91
                     </button>
                     <button
-                        onClick={() => { resetForm(); setShowForm(true); }}
+                        onClick={() => { setShowMetaSignup(true); setShowForm(false); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors shadow-sm"
+                    >
+                        <Zap className="w-4 h-4" />
+                        Connect via Meta
+                    </button>
+                    <button
+                        onClick={() => { resetForm(); setShowForm(true); setShowMetaSignup(false); }}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors shadow-sm"
                     >
                         <Plus className="w-4 h-4" />
@@ -1115,6 +1141,23 @@ function NumbersTab() {
                         : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                 }`}>
                     {autoDetectResult}
+                </div>
+            )}
+
+            {showMetaSignup && (
+                <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-5 mb-6">
+                    <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
+                        <h3 className="text-sm font-semibold text-slate-800">
+                            Connect WhatsApp via Meta Embedded Signup
+                        </h3>
+                        <button onClick={() => setShowMetaSignup(false)} className="text-slate-400 hover:text-slate-600 text-sm">Cancel</button>
+                    </div>
+                    <MetaEmbeddedSignup
+                        onSuccess={() => {
+                            fetchNumbers();
+                            setTimeout(() => setShowMetaSignup(false), 2000);
+                        }}
+                    />
                 </div>
             )}
 
@@ -1287,6 +1330,222 @@ function NumbersTab() {
                         </div>
                     ))
                 )}
+            </div>
+        </div>
+    );
+}
+
+// ─── Organizations Tab (super_admin only) ────────────────────
+interface OrgRecord {
+    id: string;
+    name: string;
+    slug: string;
+    created_at: string;
+    updated_at: string;
+}
+
+function OrganizationsTab() {
+    const [orgs, setOrgs] = useState<OrgRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showAdd, setShowAdd] = useState(false);
+    const [orgName, setOrgName] = useState("");
+    const [orgSlug, setOrgSlug] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+    const [editId, setEditId] = useState<string | null>(null);
+    const [editName, setEditName] = useState("");
+    const [editSlug, setEditSlug] = useState("");
+
+    const fetchOrgs = async () => {
+        try {
+            const res = await fetch("/api/organizations");
+            if (res.ok) setOrgs(await res.json());
+        } catch (e) {
+            console.error("Failed to fetch organizations:", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchOrgs(); }, []);
+
+    const handleCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError("");
+        setSaving(true);
+        try {
+            const res = await fetch("/api/organizations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: orgName, slug: orgSlug }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                setError(data.error || "Failed to create organization");
+                return;
+            }
+            setShowAdd(false);
+            setOrgName("");
+            setOrgSlug("");
+            fetchOrgs();
+        } catch {
+            setError("Network error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleUpdate = async (id: string) => {
+        setError("");
+        setSaving(true);
+        try {
+            const res = await fetch(`/api/organizations/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: editName, slug: editSlug }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                setError(data.error || "Failed to update organization");
+                return;
+            }
+            setEditId(null);
+            fetchOrgs();
+        } catch {
+            setError("Network error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm("Delete this organization? All associated data may become orphaned.")) return;
+        try {
+            const res = await fetch(`/api/organizations/${id}`, { method: "DELETE" });
+            if (!res.ok) {
+                const data = await res.json();
+                alert(data.error || "Failed to delete");
+                return;
+            }
+            fetchOrgs();
+        } catch {
+            alert("Network error");
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <p className="text-sm text-slate-500">{orgs.length} organization(s)</p>
+                <button
+                    onClick={() => setShowAdd(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm"
+                >
+                    <Plus className="w-4 h-4" />
+                    New Organization
+                </button>
+            </div>
+
+            {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{error}</div>
+            )}
+
+            {showAdd && (
+                <form onSubmit={handleCreate} className="mb-6 p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-3">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                        <input
+                            type="text"
+                            value={orgName}
+                            onChange={(e) => setOrgName(e.target.value)}
+                            placeholder="Acme Corp"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Slug</label>
+                        <input
+                            type="text"
+                            value={orgSlug}
+                            onChange={(e) => setOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                            placeholder="acme-corp"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                            required
+                        />
+                        <p className="text-xs text-slate-400 mt-1">Lowercase letters, numbers, and hyphens only</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button type="submit" disabled={saving} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 disabled:opacity-50">
+                            {saving ? "Creating..." : "Create"}
+                        </button>
+                        <button type="button" onClick={() => { setShowAdd(false); setError(""); }} className="px-4 py-2 text-slate-600 bg-white border border-slate-300 rounded-lg text-sm hover:bg-slate-50">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            <div className="space-y-2">
+                {orgs.map((org) => (
+                    <div key={org.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg bg-white">
+                        {editId === org.id ? (
+                            <div className="flex-1 flex items-center gap-3">
+                                <input
+                                    type="text"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                />
+                                <input
+                                    type="text"
+                                    value={editSlug}
+                                    onChange={(e) => setEditSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                                    className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                />
+                                <button onClick={() => handleUpdate(org.id)} disabled={saving} className="px-3 py-1 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700 disabled:opacity-50">
+                                    Save
+                                </button>
+                                <button onClick={() => setEditId(null)} className="px-3 py-1 text-slate-600 bg-slate-100 rounded text-sm hover:bg-slate-200">
+                                    Cancel
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <div>
+                                    <p className="font-medium text-slate-900">{org.name}</p>
+                                    <p className="text-xs text-slate-400">slug: {org.slug} &middot; {new Date(org.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => { setEditId(org.id); setEditName(org.name); setEditSlug(org.slug); }}
+                                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                        title="Edit"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    {org.id !== "00000000-0000-0000-0000-000000000001" && (
+                                        <button
+                                            onClick={() => handleDelete(org.id)}
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                ))}
             </div>
         </div>
     );

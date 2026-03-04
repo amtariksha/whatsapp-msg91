@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/ctwa/logs ──────────────────────────────────────
 // Returns CTWA click/conversation logs with optional filters
 export async function GET(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
     const { searchParams } = request.nextUrl;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
@@ -19,6 +21,7 @@ export async function GET(request: NextRequest) {
             contacts!ctwa_logs_contact_id_fkey(name, phone),
             conversations!ctwa_logs_conversation_id_fkey(status)
         `, { count: "exact" })
+        .eq("org_id", orgId)
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 

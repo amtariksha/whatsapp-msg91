@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── PATCH /api/reminders/[id] ──────────────────────────────
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
@@ -17,7 +19,8 @@ export async function PATCH(
     const { error } = await supabaseAdmin
         .from("reminders")
         .update(updateData)
-        .eq("id", id);
+        .eq("id", id)
+        .eq("org_id", orgId);
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -28,15 +31,17 @@ export async function PATCH(
 
 // ─── DELETE /api/reminders/[id] ─────────────────────────────
 export async function DELETE(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
     const { error } = await supabaseAdmin
         .from("reminders")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("org_id", orgId);
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });

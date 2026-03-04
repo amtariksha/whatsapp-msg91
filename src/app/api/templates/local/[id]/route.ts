@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── PATCH /api/templates/local/[id] ────────────────────────
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
@@ -25,6 +27,7 @@ export async function PATCH(
         .from("templates_local")
         .update(updateData)
         .eq("id", id)
+        .eq("org_id", orgId)
         .select()
         .single();
 
@@ -44,15 +47,17 @@ export async function PATCH(
 
 // ─── DELETE /api/templates/local/[id] ───────────────────────
 export async function DELETE(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
     const { error } = await supabaseAdmin
         .from("templates_local")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("org_id", orgId);
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });

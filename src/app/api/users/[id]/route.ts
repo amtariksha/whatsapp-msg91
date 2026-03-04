@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { hashPassword } from "@/lib/auth";
+import { getRequestContext } from "@/lib/request";
 
 // ─── PATCH /api/users/[id] — Update user ──────────────────
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
+
     const role = request.headers.get("x-user-role");
-    if (role !== "admin") {
+    if (role !== "admin" && !isSuperAdmin) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
@@ -24,11 +27,18 @@ export async function PATCH(
         updates.password_hash = await hashPassword(body.password);
     }
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
         .from("users")
         .update(updates)
-        .eq("id", id)
-        .select("id, name, email, role, is_active, created_at")
+        .eq("id", id);
+
+    // Regular admins can only update users in their own org
+    if (!isSuperAdmin) {
+        query = query.eq("org_id", orgId);
+    }
+
+    const { data, error } = await query
+        .select("id, name, email, role, org_id, is_active, created_at")
         .single();
 
     if (error) {
@@ -44,8 +54,10 @@ export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId, isSuperAdmin } = getRequestContext(request.headers);
+
     const role = request.headers.get("x-user-role");
-    if (role !== "admin") {
+    if (role !== "admin" && !isSuperAdmin) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
@@ -60,7 +72,14 @@ export async function DELETE(
         );
     }
 
-    const { error } = await supabaseAdmin.from("users").delete().eq("id", id);
+    let deleteQuery = supabaseAdmin.from("users").delete().eq("id", id);
+
+    // Regular admins can only delete users in their own org
+    if (!isSuperAdmin) {
+        deleteQuery = deleteQuery.eq("org_id", orgId);
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
         console.error("User delete error:", error);

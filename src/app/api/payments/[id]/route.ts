@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── GET /api/payments/[id] ───────────────────────────────
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
     const { data, error } = await supabaseAdmin
         .from("payments")
         .select("*")
         .eq("id", id)
+        .eq("org_id", orgId)
         .single();
 
     if (error || !data) {
@@ -45,6 +48,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
@@ -62,6 +66,7 @@ export async function PATCH(
         .from("payments")
         .update(updateData)
         .eq("id", id)
+        .eq("org_id", orgId)
         .select()
         .single();
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 /**
  * Map named variables {{name}} to numbered {{1}}, {{2}} etc.
@@ -32,6 +33,7 @@ export async function PUT(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
     const body = await request.json();
 
@@ -48,6 +50,7 @@ export async function PUT(
     const { data: dbNumbers } = await supabaseAdmin
         .from("integrated_numbers")
         .select("number")
+        .eq("org_id", orgId)
         .eq("active", true)
         .limit(1)
         .maybeSingle();
@@ -67,6 +70,7 @@ export async function PUT(
         .from("templates_local")
         .select("*")
         .eq("id", id)
+        .eq("org_id", orgId)
         .single();
 
     if (fetchError || !template) {
@@ -209,7 +213,8 @@ export async function PUT(
         await supabaseAdmin
             .from("templates_local")
             .update(updateData)
-            .eq("id", id);
+            .eq("id", id)
+            .eq("org_id", orgId);
 
         return NextResponse.json({
             success: true,

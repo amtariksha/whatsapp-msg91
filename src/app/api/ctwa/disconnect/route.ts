@@ -1,13 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getRequestContext } from "@/lib/request";
 
 // ─── POST /api/ctwa/disconnect ───────────────────────────────
 // Disconnect Facebook account and clear CTWA config
-export async function POST() {
+export async function POST(request: NextRequest) {
+    const { orgId } = getRequestContext(request.headers);
+
     const { error } = await supabaseAdmin
         .from("ctwa_config")
         .delete()
-        .neq("id", "00000000-0000-0000-0000-000000000000"); // delete all rows
+        .eq("org_id", orgId);
 
     if (error) {
         console.error("[CTWA Disconnect] Error:", error);

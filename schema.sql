@@ -3,6 +3,20 @@
 -- Run this in Supabase SQL Editor to create all tables.
 -- ══════════════════════════════════════════════════════════════
 
+-- ─── Organizations ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS organizations (
+    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name       TEXT NOT NULL,
+    slug       TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed default org (idempotent)
+INSERT INTO organizations (id, name, slug)
+VALUES ('00000000-0000-0000-0000-000000000001', 'Default', 'default')
+ON CONFLICT (slug) DO NOTHING;
+
 -- ─── Users (admin panel auth) ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
     id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -10,8 +24,9 @@ CREATE TABLE IF NOT EXISTS users (
     email      TEXT UNIQUE NOT NULL,
     password   TEXT NOT NULL,
     role       TEXT NOT NULL DEFAULT 'agent'
-        CHECK (role IN ('admin', 'agent')),
+        CHECK (role IN ('super_admin', 'admin', 'agent')),
     active     BOOLEAN NOT NULL DEFAULT true,
+    org_id     UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -220,6 +235,28 @@ ALTER TABLE templates_local ADD COLUMN IF NOT EXISTS variable_samples JSONB DEFA
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ctwa_clid TEXT;
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'organic';
 
+-- ─── Multi-tenancy: add org_id to all scoped tables ──────────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE integrated_numbers ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE quick_replies ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE templates_local ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE ctwa_config ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE ctwa_logs ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+
+-- Update role check to include super_admin
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('super_admin', 'admin', 'agent'));
+
+-- Contacts: change phone uniqueness from global to per-org
+ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_phone_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_org_phone ON contacts(org_id, phone);
+
+-- Integrated numbers: allow same number in different orgs (unlikely but safe)
+ALTER TABLE integrated_numbers DROP CONSTRAINT IF EXISTS integrated_numbers_number_key;
+
 -- ─── Indexes ──────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_conversations_contact ON conversations(contact_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
@@ -236,7 +273,18 @@ CREATE INDEX IF NOT EXISTS idx_conversations_ctwa ON conversations(ctwa_clid) WH
 CREATE INDEX IF NOT EXISTS idx_ctwa_logs_conversation ON ctwa_logs(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_ctwa_logs_contact ON ctwa_logs(contact_id);
 
+-- Multi-tenancy indexes
+CREATE INDEX IF NOT EXISTS idx_users_org ON users(org_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_org ON contacts(org_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_org ON conversations(org_id);
+CREATE INDEX IF NOT EXISTS idx_integrated_numbers_org ON integrated_numbers(org_id);
+CREATE INDEX IF NOT EXISTS idx_quick_replies_org ON quick_replies(org_id);
+CREATE INDEX IF NOT EXISTS idx_templates_local_org ON templates_local(org_id);
+CREATE INDEX IF NOT EXISTS idx_payments_org ON payments(org_id);
+CREATE INDEX IF NOT EXISTS idx_ctwa_config_org ON ctwa_config(org_id);
+
 -- ─── RLS (enable on all tables) ───────────────────────────────
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
@@ -254,6 +302,7 @@ ALTER TABLE ctwa_logs ENABLE ROW LEVEL SECURITY;
 -- Service role policies (full access for server-side)
 -- Drop first to avoid "already exists" errors on re-run
 DO $$ BEGIN
+    DROP POLICY IF EXISTS "Service role full access" ON organizations;
     DROP POLICY IF EXISTS "Service role full access" ON users;
     DROP POLICY IF EXISTS "Service role full access" ON contacts;
     DROP POLICY IF EXISTS "Service role full access" ON conversations;
@@ -269,6 +318,7 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Service role full access" ON ctwa_logs;
 END $$;
 
+CREATE POLICY "Service role full access" ON organizations FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON users FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON contacts FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON conversations FOR ALL USING (true);

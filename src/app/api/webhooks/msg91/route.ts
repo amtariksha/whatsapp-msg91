@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isPlaceholderName } from "@/lib/utils";
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 // ─── POST /api/webhooks/msg91 — Receive inbound messages ──
 export async function POST(request: NextRequest) {
     try {
@@ -127,17 +129,19 @@ export async function POST(request: NextRequest) {
         // WhatsApp Business App. Detect them by checking if the sender phone
         // matches a known business number.
         let isSenderBusinessNumber = false;
+        let resolvedOrgId = "";
         if (normalizedPhone && !isDeliveryReport) {
             // Check 1: Look up in integrated_numbers DB table
             const { data: matchedNumber } = await supabaseAdmin
                 .from("integrated_numbers")
-                .select("number")
+                .select("number, org_id")
                 .eq("number", normalizedPhone)
                 .eq("active", true)
                 .limit(1)
                 .maybeSingle();
             if (matchedNumber) {
                 isSenderBusinessNumber = true;
+                resolvedOrgId = matchedNumber.org_id || "";
             }
 
             // Check 2: Fallback to env var (numbers may not be in DB)
@@ -240,11 +244,27 @@ export async function POST(request: NextRequest) {
         }
 
 
+        // ─── Resolve org_id from business phone ────────────
+        // If we didn't resolve org_id from sender detection (inbound case),
+        // look up the business phone in integrated_numbers.
+        if (!resolvedOrgId && actualBusinessPhone) {
+            const { data: numRow } = await supabaseAdmin
+                .from("integrated_numbers")
+                .select("org_id")
+                .eq("number", actualBusinessPhone.replace(/^\+/, ""))
+                .eq("active", true)
+                .limit(1)
+                .maybeSingle();
+            resolvedOrgId = numRow?.org_id || "";
+        }
+        const orgId = resolvedOrgId || DEFAULT_ORG_ID;
+
         // ─── 1. Upsert Contact ─────────────────────────────
         let { data: contact } = await supabaseAdmin
             .from("contacts")
             .select("id, name")
             .eq("phone", actualCustomerPhone)
+            .eq("org_id", orgId)
             .single();
 
         if (!contact) {
@@ -254,6 +274,7 @@ export async function POST(request: NextRequest) {
                 .insert({
                     name: contactDisplayName,
                     phone: actualCustomerPhone,
+                    org_id: orgId,
                 })
                 .select("id, name")
                 .single();
@@ -295,6 +316,7 @@ export async function POST(request: NextRequest) {
             .select("id")
             .eq("contact_id", contact!.id)
             .eq("integrated_number", actualBusinessPhone || "default")
+            .eq("org_id", orgId)
             .single();
 
         if (!conversation) {
@@ -306,6 +328,7 @@ export async function POST(request: NextRequest) {
                 last_message_time: new Date().toISOString(),
                 last_incoming_timestamp: isExternalOutbound ? undefined : new Date().toISOString(),
                 unread_count: isExternalOutbound ? 0 : 1,
+                org_id: orgId,
             };
             // Tag CTWA source on new conversations
             if (ctwaClid) {
@@ -379,6 +402,7 @@ export async function POST(request: NextRequest) {
                     body: referralBody,
                     media_type: referralMediaType,
                     media_url: referralMediaUrl,
+                    org_id: orgId,
                 });
             if (logError) {
                 console.error("[MSG91 Webhook] CTWA log insert error:", logError);
