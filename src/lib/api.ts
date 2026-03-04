@@ -320,19 +320,25 @@ export async function getBalance(): Promise<{
 }
 
 // ─── App Settings ─────────────────────────────────────────
-export async function getSettings(): Promise<Record<string, string>> {
-    const res = await fetch(`${BASE_URL}/api/settings`);
+export async function getSettings(orgId?: string): Promise<Record<string, string>> {
+    const params = orgId ? `?orgId=${orgId}` : "";
+    const res = await fetch(`${BASE_URL}/api/settings${params}`);
     if (!res.ok) throw new Error("Failed to fetch settings");
     return res.json();
 }
 
 export async function updateSettings(
-    settings: Record<string, string>
+    settings: Record<string, string>,
+    orgId?: string
 ): Promise<Record<string, string>> {
+    const payload: Record<string, string> = { ...settings };
+    if (orgId) {
+        payload._orgId = orgId;
+    }
     const res = await fetch(`${BASE_URL}/api/settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("Failed to update settings");
     return res.json();

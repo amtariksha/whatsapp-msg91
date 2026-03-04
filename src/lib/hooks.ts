@@ -330,10 +330,10 @@ export function useBalance() {
 }
 
 // ─── App Settings ─────────────────────────────────────────
-export function useSettings() {
+export function useSettings(orgId?: string) {
     return useQuery({
-        queryKey: ["settings"],
-        queryFn: api.getSettings,
+        queryKey: ["settings", orgId],
+        queryFn: () => api.getSettings(orgId),
         staleTime: 5 * 60 * 1000, // settings rarely change
     });
 }
@@ -341,10 +341,10 @@ export function useSettings() {
 export function useUpdateSettings() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: (settings: Record<string, string>) =>
-            api.updateSettings(settings),
-        onSuccess: (data) => {
-            queryClient.setQueryData(["settings"], data);
+        mutationFn: ({ settings, orgId }: { settings: Record<string, string>; orgId?: string }) =>
+            api.updateSettings(settings, orgId),
+        onSuccess: (data, variables) => {
+            queryClient.setQueryData(["settings", variables.orgId], data);
         },
     });
 }

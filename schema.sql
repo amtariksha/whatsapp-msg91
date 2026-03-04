@@ -283,6 +283,29 @@ CREATE INDEX IF NOT EXISTS idx_templates_local_org ON templates_local(org_id);
 CREATE INDEX IF NOT EXISTS idx_payments_org ON payments(org_id);
 CREATE INDEX IF NOT EXISTS idx_ctwa_config_org ON ctwa_config(org_id);
 
+-- ─── Org-scoped app_settings ─────────────────────────────────
+-- Add org_id to app_settings so each org can have its own settings.
+-- Existing rows (org_id = NULL) are treated as global defaults.
+ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_pkey;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT NULL;
+-- Backfill id for existing rows that may have NULL id
+DO $$ BEGIN
+    UPDATE app_settings SET id = gen_random_uuid() WHERE id IS NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+-- Primary key on id (only if not already a PK)
+DO $$ BEGIN
+    ALTER TABLE app_settings ADD PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_table THEN NULL;
+         WHEN duplicate_object THEN NULL;
+END $$;
+-- Unique: one setting per key per org
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_settings_key_org ON app_settings(key, org_id) WHERE org_id IS NOT NULL;
+-- Unique: one global setting per key (org_id IS NULL)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_settings_key_global ON app_settings(key) WHERE org_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_app_settings_org ON app_settings(org_id) WHERE org_id IS NOT NULL;
+
 -- ─── RLS (enable on all tables) ───────────────────────────────
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;

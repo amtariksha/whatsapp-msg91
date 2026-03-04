@@ -28,6 +28,7 @@ interface UserRecord {
     name: string;
     email: string;
     role: string;
+    org_id: string;
     is_active: boolean;
     created_at: string;
 }
@@ -48,6 +49,35 @@ export default function SettingsPage() {
 
     // ─── Settings tab ───────────────────────────────────────
     const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers" | "general" | "organizations">("users");
+    const isSuperAdmin = currentUser?.role === "super_admin";
+
+    // ─── Org list (for super_admin org selectors across tabs) ──
+    const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
+    const [userSelectedOrgId, setUserSelectedOrgId] = useState("");
+
+    const fetchOrgs = async () => {
+        try {
+            const res = await fetch("/api/organizations");
+            if (res.ok) {
+                const data = await res.json();
+                setOrgs(data);
+                if (data.length > 0 && !userSelectedOrgId) {
+                    setUserSelectedOrgId(data[0].id);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch orgs:", e);
+        }
+    };
+
+    useEffect(() => {
+        if (isSuperAdmin) fetchOrgs();
+    }, [isSuperAdmin]);
+
+    const getOrgName = (orgId: string) => {
+        const org = orgs.find((o) => o.id === orgId);
+        return org?.name || "Unknown";
+    };
 
     // ─── Reset password dialog ─────────────────────────────
     const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -77,10 +107,14 @@ export default function SettingsPage() {
         setSaving(true);
 
         try {
+            const payload: Record<string, string> = { name, email, password, userRole };
+            if (isSuperAdmin && userSelectedOrgId) {
+                payload.org_id = userSelectedOrgId;
+            }
             const res = await fetch("/api/users", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, email, password, userRole }),
+                body: JSON.stringify(payload),
             });
 
             if (!res.ok) {
@@ -249,6 +283,11 @@ export default function SettingsPage() {
                                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">
                                         Email
                                     </th>
+                                    {isSuperAdmin && (
+                                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">
+                                            Org
+                                        </th>
+                                    )}
                                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">
                                         Role
                                     </th>
@@ -263,14 +302,14 @@ export default function SettingsPage() {
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={5} className="text-center py-12">
+                                        <td colSpan={isSuperAdmin ? 6 : 5} className="text-center py-12">
                                             <Loader2 className="w-6 h-6 animate-spin text-slate-400 mx-auto" />
                                         </td>
                                     </tr>
                                 ) : users.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={5}
+                                            colSpan={isSuperAdmin ? 6 : 5}
                                             className="text-center py-12 text-slate-400"
                                         >
                                             No users found
@@ -295,6 +334,14 @@ export default function SettingsPage() {
                                             <td className="px-6 py-4 text-sm text-slate-600">
                                                 {u.email}
                                             </td>
+                                            {isSuperAdmin && (
+                                                <td className="px-6 py-4">
+                                                    <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                                                        <Building2 className="w-3 h-3" />
+                                                        {getOrgName(u.org_id)}
+                                                    </span>
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4">
                                                 <button
                                                     onClick={() => toggleRole(u)}
@@ -434,6 +481,24 @@ export default function SettingsPage() {
                                         </select>
                                     </div>
 
+                                    {isSuperAdmin && orgs.length > 0 && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                Organization
+                                            </label>
+                                            <select
+                                                value={userSelectedOrgId}
+                                                onChange={(e) => setUserSelectedOrgId(e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                                required
+                                            >
+                                                {orgs.map((org) => (
+                                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
                                     <div className="flex gap-3 pt-2">
                                         <button
                                             type="button"
@@ -507,7 +572,7 @@ export default function SettingsPage() {
             )}
 
             {activeTab === "quick-replies" && (
-                <QuickRepliesTab />
+                <QuickRepliesTab isSuperAdmin={!!isSuperAdmin} orgs={orgs} getOrgName={getOrgName} />
             )}
 
             {activeTab === "numbers" && (
@@ -515,7 +580,7 @@ export default function SettingsPage() {
             )}
 
             {activeTab === "general" && (
-                <GeneralSettingsTab />
+                <GeneralSettingsTab isSuperAdmin={!!isSuperAdmin} orgs={orgs} />
             )}
 
             {activeTab === "organizations" && (
@@ -526,9 +591,10 @@ export default function SettingsPage() {
 }
 
 // ─── General Settings Tab ─────────────────────────────────
-function GeneralSettingsTab() {
-    const { data: settings, isLoading } = useSettings();
-    const { mutate: updateSettings, isPending: saving } = useUpdateSettings();
+function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; orgs: { id: string; name: string }[] }) {
+    const [selectedOrgId, setSelectedOrgId] = useState(orgs[0]?.id || "");
+    const { data: settings, isLoading } = useSettings(selectedOrgId || undefined);
+    const { mutate: updateSettingsMutation, isPending: saving } = useUpdateSettings();
 
     const [paymentTemplateName, setPaymentTemplateName] = useState("");
     const [catalogId, setCatalogId] = useState("");
@@ -539,6 +605,13 @@ function GeneralSettingsTab() {
     const [facebookOauthRedirectUri, setFacebookOauthRedirectUri] = useState("");
     const [metaApiVersion, setMetaApiVersion] = useState("v21.0");
     const [saved, setSaved] = useState(false);
+
+    // Update selectedOrgId when orgs first load
+    useEffect(() => {
+        if (orgs.length > 0 && !selectedOrgId) {
+            setSelectedOrgId(orgs[0].id);
+        }
+    }, [orgs, selectedOrgId]);
 
     useEffect(() => {
         if (settings) {
@@ -556,16 +629,27 @@ function GeneralSettingsTab() {
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         setSaved(false);
-        updateSettings(
+
+        // Org-specific settings
+        const orgSettings: Record<string, string> = {
+            payment_template_name: paymentTemplateName,
+            whatsapp_catalog_id: catalogId,
+            contacts_page_size: String(Math.min(100, Math.max(5, parseInt(contactsPageSize) || 25))),
+            payments_page_size: String(Math.min(100, Math.max(5, parseInt(paymentsPageSize) || 20))),
+        };
+
+        // Global settings (only super_admin can save these)
+        if (isSuperAdmin) {
+            orgSettings.facebook_app_id = facebookAppId;
+            orgSettings.facebook_app_secret = facebookAppSecret;
+            orgSettings.facebook_oauth_redirect_uri = facebookOauthRedirectUri;
+            orgSettings.meta_api_version = metaApiVersion || "v21.0";
+        }
+
+        updateSettingsMutation(
             {
-                payment_template_name: paymentTemplateName,
-                whatsapp_catalog_id: catalogId,
-                contacts_page_size: String(Math.min(100, Math.max(5, parseInt(contactsPageSize) || 25))),
-                payments_page_size: String(Math.min(100, Math.max(5, parseInt(paymentsPageSize) || 20))),
-                facebook_app_id: facebookAppId,
-                facebook_app_secret: facebookAppSecret,
-                facebook_oauth_redirect_uri: facebookOauthRedirectUri,
-                meta_api_version: metaApiVersion || "v21.0",
+                settings: orgSettings,
+                orgId: selectedOrgId || undefined,
             },
             {
                 onSuccess: () => {
@@ -586,12 +670,33 @@ function GeneralSettingsTab() {
 
     return (
         <div>
+            {/* Org Selector for super_admin */}
+            {isSuperAdmin && orgs.length > 0 && (
+                <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                    <div className="flex items-center gap-3">
+                        <Building2 className="w-5 h-5 text-slate-500" />
+                        <div className="flex-1">
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Configure settings for organization</label>
+                            <select
+                                value={selectedOrgId}
+                                onChange={(e) => setSelectedOrgId(e.target.value)}
+                                className="w-full max-w-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            >
+                                {orgs.map((org) => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* MSG91 Balance Card */}
             <BalanceCard />
 
             <form onSubmit={handleSave}>
                 <p className="text-sm text-slate-500 mb-6">
-                    Configure application-wide settings. These values are stored in the database and apply to all users.
+                    Organization-specific settings. {isSuperAdmin ? "Select an organization above to configure its settings." : "These values apply to your organization."}
                 </p>
 
                 <div className="space-y-6">
@@ -673,10 +778,11 @@ function GeneralSettingsTab() {
                     </div>
                 </div>
 
-                {/* Facebook / CTWA Settings */}
+                {/* Facebook / CTWA Settings — Global, super_admin only */}
+                {isSuperAdmin && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                     <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                        Facebook / CTWA (Click-to-WhatsApp Ads)
+                        Facebook / CTWA (Click-to-WhatsApp Ads) <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded ml-2 font-bold uppercase tracking-wider">Global</span>
                     </h3>
                     <div className="space-y-5">
                         <div>
@@ -741,6 +847,7 @@ function GeneralSettingsTab() {
                         </div>
                     </div>
                 </div>
+                )}
             </div>
 
             <div className="flex items-center gap-3 mt-6">
@@ -812,14 +919,15 @@ function BalanceCard() {
 }
 
 // ─── Quick Replies Tab ────────────────────────────────────
-function QuickRepliesTab() {
-    const [quickReplies, setQuickReplies] = useState<{ id: string; title: string; body: string; shortcut?: string }[]>([]);
+function QuickRepliesTab({ isSuperAdmin, orgs, getOrgName }: { isSuperAdmin: boolean; orgs: { id: string; name: string }[]; getOrgName: (id: string) => string }) {
+    const [quickReplies, setQuickReplies] = useState<{ id: string; title: string; body: string; shortcut?: string; orgId?: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [title, setTitle] = useState("");
     const [body, setBody] = useState("");
     const [shortcut, setShortcut] = useState("");
+    const [selectedOrgId, setSelectedOrgId] = useState(orgs[0]?.id || "");
     const [saving, setSaving] = useState(false);
 
     const fetchReplies = async () => {
@@ -841,10 +949,14 @@ function QuickRepliesTab() {
         try {
             const url = editId ? `/api/quick-replies/${editId}` : "/api/quick-replies";
             const method = editId ? "PATCH" : "POST";
+            const payload: Record<string, unknown> = { title, body, shortcut: shortcut || undefined };
+            if (isSuperAdmin && selectedOrgId && !editId) {
+                payload.orgId = selectedOrgId;
+            }
             await fetch(url, {
                 method,
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title, body, shortcut: shortcut || undefined }),
+                body: JSON.stringify(payload),
             });
             resetForm();
             fetchReplies();
@@ -853,11 +965,12 @@ function QuickRepliesTab() {
         }
     };
 
-    const handleEdit = (qr: { id: string; title: string; body: string; shortcut?: string }) => {
+    const handleEdit = (qr: { id: string; title: string; body: string; shortcut?: string; orgId?: string }) => {
         setEditId(qr.id);
         setTitle(qr.title);
         setBody(qr.body);
         setShortcut(qr.shortcut || "");
+        if (qr.orgId) setSelectedOrgId(qr.orgId);
         setShowForm(true);
     };
 
@@ -873,6 +986,7 @@ function QuickRepliesTab() {
         setTitle("");
         setBody("");
         setShortcut("");
+        if (orgs.length > 0) setSelectedOrgId(orgs[0].id);
     };
 
     return (
@@ -893,6 +1007,21 @@ function QuickRepliesTab() {
                         {editId ? "Edit Quick Reply" : "New Quick Reply"}
                     </h3>
                     <form onSubmit={handleSave} className="space-y-3">
+                        {isSuperAdmin && orgs.length > 0 && !editId && (
+                            <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">Organization</label>
+                                <select
+                                    value={selectedOrgId}
+                                    onChange={(e) => setSelectedOrgId(e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                    required
+                                >
+                                    {orgs.map((org) => (
+                                        <option key={org.id} value={org.id}>{org.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-medium text-slate-600 mb-1">Title</label>
@@ -970,6 +1099,12 @@ function QuickRepliesTab() {
                                         <span className="text-sm font-medium text-slate-800">{qr.title}</span>
                                         {qr.shortcut && (
                                             <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">/{qr.shortcut}</span>
+                                        )}
+                                        {isSuperAdmin && qr.orgId && (
+                                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                                <Building2 className="w-2.5 h-2.5" />
+                                                {getOrgName(qr.orgId)}
+                                            </span>
                                         )}
                                     </div>
                                     <p className="text-xs text-slate-500 line-clamp-2">{qr.body}</p>
@@ -1377,27 +1512,38 @@ function NumbersTab() {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {typeof num.id === "string" && num.id.startsWith("env-") && (
+                                        <span className="text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
+                                            ENV
+                                        </span>
+                                    )}
                                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${num.provider === 'meta' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
                                         {num.provider || 'MSG91'}
                                     </span>
                                 </div>
                             </div>
-                            
+
                             <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end gap-2">
-                                <button
-                                    onClick={() => handleEdit(num)}
-                                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                                    title="Edit Configuration"
-                                >
-                                    <Pencil className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(num.id)}
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                    title="Delete Number"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                                {typeof num.id === "string" && num.id.startsWith("env-") ? (
+                                    <span className="text-[10px] text-slate-400 italic">Read-only (from env var)</span>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => handleEdit(num)}
+                                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                            title="Edit Configuration"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(num.id)}
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            title="Delete Number"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     ))

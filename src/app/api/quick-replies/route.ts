@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
             title: qr.title,
             body: qr.body,
             shortcut: qr.shortcut || undefined,
+            orgId: qr.org_id || undefined,
             createdBy: qr.created_by || undefined,
             createdAt: qr.created_at,
         }))
