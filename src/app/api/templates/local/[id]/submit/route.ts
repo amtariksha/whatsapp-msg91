@@ -187,7 +187,7 @@ export async function POST(
     }
 
     const msg91Payload: Record<string, unknown> = {
-        name: template.name,
+        template_name: template.name,
         category: template.category || "MARKETING",
         language: template.language || "en",
         components,
@@ -201,7 +201,7 @@ export async function POST(
         console.log("[Template Submit] Submitting to MSG91:", JSON.stringify(msg91Payload, null, 2));
 
         const response = await fetch(
-            "https://control.msg91.com/api/v5/whatsapp/whatsapp-template",
+            "https://api.msg91.com/api/v5/whatsapp/client-panel-template/",
             {
                 method: "POST",
                 headers: {

@@ -57,7 +57,7 @@ export async function DELETE(
             console.log("[Template Delete] Deleting from MSG91:", template.msg91_template_id);
 
             const response = await fetch(
-                `https://control.msg91.com/api/v5/whatsapp/whatsapp-template/${template.msg91_template_id}`,
+                `https://control.msg91.com/api/v5/whatsapp/client-panel-template/${template.msg91_template_id}/`,
                 {
                     method: "DELETE",
                     headers: {
