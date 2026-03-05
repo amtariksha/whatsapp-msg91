@@ -70,6 +70,20 @@ export async function POST(request: NextRequest) {
             const metaMessageId = message.id;
             const timestamp = new Date(parseInt(message.timestamp) * 1000).toISOString();
 
+            // ─── Resolve organization from integrated number ───
+            const lookupNumber = integratedNumberDisplay || integratedNumberId;
+            const { data: numberRecord } = await supabaseAdmin
+                .from("integrated_numbers")
+                .select("organization_id")
+                .or(`number.eq.${lookupNumber},meta_phone_number_id.eq.${integratedNumberId}`)
+                .single();
+
+            if (!numberRecord) {
+                console.error(`[Meta Webhook] No integrated number found for ${lookupNumber}`);
+                return NextResponse.json({ success: true }, { status: 200 });
+            }
+            const orgId = numberRecord.organization_id;
+
             let messageBody = "";
             let mediaUrl = null;
 
@@ -101,6 +115,7 @@ export async function POST(request: NextRequest) {
                 .from("contacts")
                 .select("id")
                 .eq("phone", senderPhone)
+                .eq("organization_id", orgId)
                 .single();
 
             if (existingContact) {
@@ -108,7 +123,7 @@ export async function POST(request: NextRequest) {
             } else {
                 const { data: newContact, error: contactError } = await supabaseAdmin
                     .from("contacts")
-                    .insert({ phone: senderPhone, name: senderName })
+                    .insert({ organization_id: orgId, phone: senderPhone, name: senderName })
                     .select("id")
                     .single();
 
@@ -126,6 +141,7 @@ export async function POST(request: NextRequest) {
                 .eq("contact_id", contactId)
                 .eq("status", "open")
                 .eq("integrated_number", integratedNumberDisplay || integratedNumberId)
+                .eq("organization_id", orgId)
                 .single();
 
             if (existingConv) {
@@ -143,6 +159,7 @@ export async function POST(request: NextRequest) {
                 const { data: newConv, error: convError } = await supabaseAdmin
                     .from("conversations")
                     .insert({
+                        organization_id: orgId,
                         contact_id: contactId,
                         integrated_number: integratedNumberDisplay || integratedNumberId,
                         status: "open",

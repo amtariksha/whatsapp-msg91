@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 function mapMessage(row: Record<string, unknown>) {
     return {
@@ -30,9 +31,12 @@ function mapContact(row: Record<string, unknown>) {
 
 // ─── GET /api/conversations/[id] ──────────────────────────
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { id } = await params;
 
     // Fetch conversation with contact and assigned user
@@ -40,6 +44,7 @@ export async function GET(
         .from("conversations")
         .select("*, contacts(*)")
         .eq("id", id)
+        .eq("organization_id", orgId)
         .single();
 
     if (convError || !conv) {
@@ -99,6 +104,9 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { id } = await params;
     const body = await request.json();
 
@@ -116,6 +124,7 @@ export async function PATCH(
         .from("conversations")
         .update(updateData)
         .eq("id", id)
+        .eq("organization_id", orgId)
         .select("*, contacts(*)")
         .single();
 

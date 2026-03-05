@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getOrgId, orgError, getMsg91AuthKey } from "@/lib/org-helpers";
 
 const MSG91_TEMPLATE_API =
     "https://control.msg91.com/api/v5/whatsapp/whatsapp-get-template";
@@ -8,9 +9,12 @@ const MSG91_TEMPLATE_API =
  * Proxy to MSG91 template listing API.
  * Returns the list of WhatsApp templates.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     try {
-        const authKey = process.env.MSG91_AUTH_KEY;
+        const authKey = await getMsg91AuthKey(orgId);
 
         if (!authKey) {
             return NextResponse.json(

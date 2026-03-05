@@ -23,33 +23,51 @@ const supabase = createClient(url, key, {
 async function seed() {
     console.log("🌱 Seeding demo data...\n");
 
+    // 0. Ensure default organization
+    const { data: org } = await supabase
+        .from("organizations")
+        .upsert(
+            { id: "a0000000-0000-0000-0000-000000000001", name: "Default Organization", slug: "default" },
+            { onConflict: "slug" }
+        )
+        .select("id")
+        .single();
+
+    const orgId = org?.id || "a0000000-0000-0000-0000-000000000001";
+    console.log(`✅ Organization ready: ${orgId}`);
+
     // 1. Contacts
     const contacts = [
         {
+            organization_id: orgId,
             name: "Rahul Sharma",
             phone: "919876543210",
             email: "rahul@example.com",
             tags: ["VIP", "Active"],
         },
         {
+            organization_id: orgId,
             name: "Priya Patel",
             phone: "919887654321",
             email: "priya@example.com",
             tags: ["New"],
         },
         {
+            organization_id: orgId,
             name: "Amit Kumar",
             phone: "919898765432",
             email: "amit@example.com",
             tags: ["Support"],
         },
         {
+            organization_id: orgId,
             name: "Sneha Gupta",
             phone: "919999876543",
             email: "sneha@example.com",
             tags: ["Active", "Delivery"],
         },
         {
+            organization_id: orgId,
             name: "Vikram Singh",
             phone: "919777654321",
             email: "vikram@example.com",
@@ -59,7 +77,7 @@ async function seed() {
 
     const { data: insertedContacts, error: contactError } = await supabase
         .from("contacts")
-        .upsert(contacts, { onConflict: "phone" })
+        .upsert(contacts, { onConflict: "phone,organization_id" })
         .select();
 
     if (contactError) {
@@ -71,6 +89,7 @@ async function seed() {
     // 2. Conversations
     const now = new Date();
     const conversations = insertedContacts!.map((c, i) => ({
+        organization_id: orgId,
         contact_id: c.id,
         integrated_number: i < 3 ? "919999999999" : "918888888888",
         status: i === 4 ? "resolved" : "open",
@@ -166,6 +185,7 @@ async function seed() {
     // 4. Demo payments
     const payments = [
         {
+            organization_id: orgId,
             contact_id: insertedContacts![0].id,
             conversation_id: insertedConvs![0].id,
             contact_name: "Rahul Sharma",
@@ -178,6 +198,7 @@ async function seed() {
             integrated_number: "919999999999",
         },
         {
+            organization_id: orgId,
             contact_id: insertedContacts![1].id,
             conversation_id: insertedConvs![1].id,
             contact_name: "Priya Patel",
@@ -190,6 +211,7 @@ async function seed() {
             integrated_number: "919999999999",
         },
         {
+            organization_id: orgId,
             contact_id: insertedContacts![3].id,
             conversation_id: insertedConvs![3].id,
             contact_name: "Sneha Gupta",

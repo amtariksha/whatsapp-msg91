@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 // ─── GET /api/quick-replies ─────────────────────────────────
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { data, error } = await supabaseAdmin
         .from("quick_replies")
         .select("*")
+        .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
 
     if (error) {
@@ -27,6 +32,9 @@ export async function GET() {
 
 // ─── POST /api/quick-replies ────────────────────────────────
 export async function POST(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const body = await request.json();
 
     const { data, error } = await supabaseAdmin
@@ -35,6 +43,7 @@ export async function POST(request: NextRequest) {
             title: body.title,
             body: body.body,
             shortcut: body.shortcut || null,
+            organization_id: orgId,
         })
         .select()
         .single();

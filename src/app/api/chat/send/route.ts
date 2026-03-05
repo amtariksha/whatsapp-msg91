@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError, getMsg91AuthKey } from "@/lib/org-helpers";
 
 // ─── POST /api/chat/send ──────────────────────────────────
 export async function POST(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const body = await request.json();
     const {
         to,
@@ -20,6 +24,7 @@ export async function POST(request: NextRequest) {
         .from("integrated_numbers")
         .select("*")
         .eq("number", sendFromNumber)
+        .eq("organization_id", orgId)
         .single();
 
     // Default to msg91 if not found in db
@@ -206,7 +211,7 @@ export async function POST(request: NextRequest) {
         }
     } else {
         // ─── Send via MSG91 ──────────────────────────────────────
-        const authKey = process.env.MSG91_AUTH_KEY;
+        const authKey = await getMsg91AuthKey(orgId);
         if (!authKey) {
             return NextResponse.json({ error: "MSG91_AUTH_KEY not configured" }, { status: 500 });
         }

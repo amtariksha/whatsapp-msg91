@@ -1,26 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { cookies } from "next/headers";
-import * as jose from "jose";
-
-async function getCurrentUserId(): Promise<string | null> {
-    try {
-        const cookieStore = await cookies();
-        const token = cookieStore.get("auth_token")?.value;
-        if (!token) return null;
-        const secret = new TextEncoder().encode(
-            process.env.JWT_SECRET || "whatsapp-crm-secret-key-2024"
-        );
-        const { payload } = await jose.jwtVerify(token, secret);
-        return payload.userId as string;
-    } catch {
-        return null;
-    }
-}
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 // ─── GET /api/reminders ─────────────────────────────────────
-export async function GET() {
-    const userId = await getCurrentUserId();
+export async function GET(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
+    const userId = request.headers.get("x-user-id");
     if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -29,6 +16,7 @@ export async function GET() {
         .from("reminders")
         .select("*, conversations(contact_id, contacts(name, phone))")
         .eq("user_id", userId)
+        .eq("organization_id", orgId)
         .eq("is_dismissed", false)
         .order("remind_at", { ascending: true });
 
@@ -58,7 +46,10 @@ export async function GET() {
 
 // ─── POST /api/reminders ────────────────────────────────────
 export async function POST(request: NextRequest) {
-    const userId = await getCurrentUserId();
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
+    const userId = request.headers.get("x-user-id");
     if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -72,6 +63,7 @@ export async function POST(request: NextRequest) {
             user_id: userId,
             remind_at: body.remindAt,
             note: body.note || null,
+            organization_id: orgId,
         })
         .select()
         .single();

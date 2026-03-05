@@ -55,6 +55,7 @@ export async function middleware(request: NextRequest) {
     res.headers.set("x-user-email", payload.email);
     res.headers.set("x-user-role", payload.role);
     res.headers.set("x-user-name", payload.name);
+    res.headers.set("x-organization-id", payload.organizationId);
 
     return res;
 }

@@ -42,12 +42,28 @@ export async function POST(request: NextRequest) {
         );
     }
 
+    // Fetch organization
+    const { data: org } = await supabaseAdmin
+        .from("organizations")
+        .select("id, name")
+        .eq("id", user.organization_id)
+        .single();
+
+    if (!org) {
+        return NextResponse.json(
+            { error: "No organization found for this user" },
+            { status: 403 }
+        );
+    }
+
     // Sign JWT
     const token = await signToken({
         userId: user.id,
         email: user.email,
         role: user.role,
         name: user.name,
+        organizationId: org.id,
+        organizationName: org.name,
     });
 
     // Set httpOnly cookie
@@ -57,6 +73,8 @@ export async function POST(request: NextRequest) {
             name: user.name,
             email: user.email,
             role: user.role,
+            organizationId: org.id,
+            organizationName: org.name,
         },
     });
 

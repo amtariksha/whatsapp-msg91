@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError, getMsg91AuthKey, getRazorpayKeys } from "@/lib/org-helpers";
 
 function mapPayment(row: Record<string, unknown>) {
     return {
@@ -26,6 +27,9 @@ function mapPayment(row: Record<string, unknown>) {
 
 // ─── GET /api/payments ─────────────────────────────────────
 export async function GET(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const from = searchParams.get("from");
@@ -34,6 +38,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
         .from("payments")
         .select("*")
+        .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
 
     if (status && status !== "all") {
@@ -90,6 +95,9 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/payments ────────────────────────────────────
 export async function POST(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const body = await request.json();
     const {
         contactName,
@@ -102,8 +110,7 @@ export async function POST(request: NextRequest) {
         sendViaWhatsApp,
     } = body;
 
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const { keyId, keySecret } = await getRazorpayKeys(orgId);
 
     let razorpayLinkId: string | null = null;
     let shortUrl: string | null = null;
@@ -154,6 +161,7 @@ export async function POST(request: NextRequest) {
     const { data: payment, error } = await supabaseAdmin
         .from("payments")
         .insert({
+            organization_id: orgId,
             contact_id: contactId || null,
             conversation_id: conversationId || null,
             contact_name: contactName,
@@ -178,7 +186,7 @@ export async function POST(request: NextRequest) {
 
     // ─── Optionally send payment link via WhatsApp ───────────
     if (sendViaWhatsApp && shortUrl && conversationId) {
-        const msgAuthKey = process.env.MSG91_AUTH_KEY;
+        const msgAuthKey = await getMsg91AuthKey(orgId);
         if (msgAuthKey) {
             try {
                 const cleanPhone = phone.replace(/^\+/, "");

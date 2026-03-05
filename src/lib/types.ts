@@ -1,3 +1,16 @@
+// ─── Organization ─────────────────────────────────────────
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  msg91AuthKey?: string | null;
+  razorpayKeyId?: string | null;
+  razorpayKeySecret?: string | null;
+  hasMsg91Key?: boolean;
+  hasRazorpayKeys?: boolean;
+  createdAt: string;
+}
+
 // ─── WhatsApp Number ───────────────────────────────────────
 export interface WhatsAppNumber {
   id: string;
@@ -256,4 +269,5 @@ export interface AppUser {
   email: string;
   role: string;
   isActive: boolean;
+  organizationId?: string;
 }

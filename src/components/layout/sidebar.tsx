@@ -78,9 +78,14 @@ export function Sidebar() {
                     <MessageCircle className="w-5 h-5" />
                 </div>
                 {sidebarOpen && (
-                    <span className="font-bold text-lg text-slate-900 tracking-tight">
-                        Swarg<span className="text-emerald-600">CRM</span>
-                    </span>
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-lg text-slate-900 tracking-tight leading-tight">
+                            Swarg<span className="text-emerald-600">CRM</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider truncate">
+                            {user?.organizationName || "Organization"}
+                        </span>
+                    </div>
                 )}
             </div>
 

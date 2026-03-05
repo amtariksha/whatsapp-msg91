@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 // ─── PATCH /api/quick-replies/[id] ──────────────────────────
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { id } = await params;
     const body = await request.json();
 
@@ -18,6 +22,7 @@ export async function PATCH(
         .from("quick_replies")
         .update(updateData)
         .eq("id", id)
+        .eq("organization_id", orgId)
         .select()
         .single();
 
@@ -36,15 +41,19 @@ export async function PATCH(
 
 // ─── DELETE /api/quick-replies/[id] ─────────────────────────
 export async function DELETE(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { id } = await params;
 
     const { error } = await supabaseAdmin
         .from("quick_replies")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("organization_id", orgId);
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });

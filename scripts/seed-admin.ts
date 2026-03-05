@@ -43,7 +43,20 @@ async function main() {
     const name = "Admin";
     const role = "admin";
 
-    console.log("🔑 Creating admin user...");
+    console.log("🔑 Creating default organization and admin user...");
+
+    // Ensure default organization exists
+    const { data: org } = await supabase
+        .from("organizations")
+        .upsert(
+            { id: "a0000000-0000-0000-0000-000000000001", name: "Default Organization", slug: "default" },
+            { onConflict: "slug" }
+        )
+        .select("id")
+        .single();
+
+    const orgId = org?.id || "a0000000-0000-0000-0000-000000000001";
+    console.log(`✅ Organization ready: ${orgId}`);
 
     // Check if already exists
     const { data: existing } = await supabase
@@ -61,7 +74,7 @@ async function main() {
 
     const { data, error } = await supabase
         .from("users")
-        .insert({ name, email, password_hash: passwordHash, role, is_active: true })
+        .insert({ organization_id: orgId, name, email, password_hash: passwordHash, role, is_active: true })
         .select("id, email, role")
         .single();
 

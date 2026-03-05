@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError, getMsg91AuthKey } from "@/lib/org-helpers";
 
-const MSG91_AUTH_KEY = process.env.MSG91_AUTH_KEY || "";
 const MSG91_API_BASE_URL = "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     try {
         const body = await request.json();
         const { templateId, variables, recipients, integratedNumber } = body;
@@ -16,12 +19,30 @@ export async function POST(request: Request) {
             );
         }
 
-        if (!MSG91_AUTH_KEY) {
+        const authKey = await getMsg91AuthKey(orgId);
+        if (!authKey) {
             console.error("[Broadcast API] MSG91_AUTH_KEY is missing");
             return NextResponse.json(
                 { error: "Server misconfiguration. Missing API Key." },
                 { status: 500 }
             );
+        }
+
+        // Validate that integratedNumber belongs to this org
+        if (integratedNumber) {
+            const { data: numConfig } = await supabaseAdmin
+                .from("integrated_numbers")
+                .select("id")
+                .eq("number", integratedNumber)
+                .eq("organization_id", orgId)
+                .single();
+
+            if (!numConfig) {
+                return NextResponse.json(
+                    { error: "Integrated number does not belong to this organization" },
+                    { status: 403 }
+                );
+            }
         }
 
         // Format the bulk payload for MSG91
@@ -66,7 +87,7 @@ export async function POST(request: Request) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                authkey: MSG91_AUTH_KEY,
+                authkey: authKey,
             },
             body: JSON.stringify(payload),
         });

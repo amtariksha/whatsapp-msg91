@@ -52,6 +52,8 @@ export interface TokenPayload {
     email: string;
     role: string;
     name: string;
+    organizationId: string;
+    organizationName: string;
 }
 
 export async function signToken(payload: TokenPayload): Promise<string> {

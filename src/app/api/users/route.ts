@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { hashPassword } from "@/lib/auth";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 // ─── GET /api/users — List all users (admin only) ─────────
 export async function GET(request: NextRequest) {
@@ -9,9 +10,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { data, error } = await supabaseAdmin
         .from("users")
         .select("id, name, email, role, is_active, created_at")
+        .eq("organization_id", orgId)
         .order("created_at", { ascending: true });
 
     if (error) {
@@ -28,6 +33,9 @@ export async function POST(request: NextRequest) {
     if (role !== "admin") {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
+
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
 
     const { name, email, password, userRole } = await request.json();
 
@@ -57,6 +65,7 @@ export async function POST(request: NextRequest) {
     const { data: user, error } = await supabaseAdmin
         .from("users")
         .insert({
+            organization_id: orgId,
             name,
             email: email.toLowerCase().trim(),
             password_hash: passwordHash,

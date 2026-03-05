@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
             name: payload.name,
             email: payload.email,
             role: payload.role,
+            organizationId: payload.organizationId,
+            organizationName: payload.organizationName,
         },
     });
 }

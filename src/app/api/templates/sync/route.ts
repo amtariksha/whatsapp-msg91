@@ -1,9 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getOrgId, orgError, getMsg91AuthKey } from "@/lib/org-helpers";
 
 // ─── POST /api/templates/sync ───────────────────────────────
 // Sync templates with MSG91 / Meta
-export async function POST() {
-    const authKey = process.env.MSG91_AUTH_KEY;
+export async function POST(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
+    const authKey = await getMsg91AuthKey(orgId);
     if (!authKey) {
         return NextResponse.json(
             { error: "MSG91_AUTH_KEY not configured" },

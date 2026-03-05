@@ -183,12 +183,25 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // ─── Resolve organization from integrated number ───
+        const { data: numberRecord } = await supabaseAdmin
+            .from("integrated_numbers")
+            .select("organization_id")
+            .eq("number", actualBusinessPhone)
+            .single();
+
+        if (!numberRecord) {
+            console.error(`[MSG91 Webhook] No integrated number found for ${actualBusinessPhone}`);
+            return NextResponse.json({ error: "Unknown business number" }, { status: 400 });
+        }
+        const orgId = numberRecord.organization_id;
 
         // ─── 1. Upsert Contact ─────────────────────────────
         let { data: contact } = await supabaseAdmin
             .from("contacts")
             .select("id, name")
             .eq("phone", actualCustomerPhone)
+            .eq("organization_id", orgId)
             .single();
 
         if (!contact) {
@@ -196,6 +209,7 @@ export async function POST(request: NextRequest) {
             const { data: newContact, error: contactError } = await supabaseAdmin
                 .from("contacts")
                 .insert({
+                    organization_id: orgId,
                     name: contactDisplayName,
                     phone: actualCustomerPhone,
                 })
@@ -216,12 +230,14 @@ export async function POST(request: NextRequest) {
             .select("id")
             .eq("contact_id", contact!.id)
             .eq("integrated_number", actualBusinessPhone || "default")
+            .eq("organization_id", orgId)
             .single();
 
         if (!conversation) {
             const { data: newConv, error: convError } = await supabaseAdmin
                 .from("conversations")
                 .insert({
+                    organization_id: orgId,
                     contact_id: contact!.id,
                     integrated_number: actualBusinessPhone || "default",
                     status: "open",

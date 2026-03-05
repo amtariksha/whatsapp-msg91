@@ -12,6 +12,10 @@ import {
     KeyRound,
     Zap,
     Pencil,
+    Building2,
+    Eye,
+    EyeOff,
+    Save,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 
@@ -39,7 +43,21 @@ export default function SettingsPage() {
     const [error, setError] = useState("");
 
     // ─── Settings tab ───────────────────────────────────────
-    const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers">("users");
+    const [activeTab, setActiveTab] = useState<"users" | "quick-replies" | "numbers" | "organization">("users");
+
+    // ─── Organization state ──────────────────────────────────
+    const [orgName, setOrgName] = useState("");
+    const [orgSlug, setOrgSlug] = useState("");
+    const [orgMsg91Key, setOrgMsg91Key] = useState("");
+    const [orgRazorpayKeyId, setOrgRazorpayKeyId] = useState("");
+    const [orgRazorpayKeySecret, setOrgRazorpayKeySecret] = useState("");
+    const [orgLoading, setOrgLoading] = useState(false);
+    const [orgSaving, setOrgSaving] = useState(false);
+    const [showMsg91Key, setShowMsg91Key] = useState(false);
+    const [showRazorpayId, setShowRazorpayId] = useState(false);
+    const [showRazorpaySecret, setShowRazorpaySecret] = useState(false);
+    const [orgHasMsg91Key, setOrgHasMsg91Key] = useState(false);
+    const [orgHasRazorpayKeys, setOrgHasRazorpayKeys] = useState(false);
 
     // ─── Reset password dialog ─────────────────────────────
     const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -132,6 +150,55 @@ export default function SettingsPage() {
         setNewPassword("");
     };
 
+    // ─── Organization fetch/save ─────────────────────────────
+    const fetchOrg = async () => {
+        setOrgLoading(true);
+        try {
+            const res = await fetch("/api/organizations");
+            if (res.ok) {
+                const data = await res.json();
+                setOrgName(data.name || "");
+                setOrgSlug(data.slug || "");
+                setOrgHasMsg91Key(data.hasMsg91Key || false);
+                setOrgHasRazorpayKeys(data.hasRazorpayKeys || false);
+                // Don't prefill key fields — they're masked on the server
+                setOrgMsg91Key("");
+                setOrgRazorpayKeyId("");
+                setOrgRazorpayKeySecret("");
+            }
+        } catch (e) {
+            console.error("Failed to fetch org:", e);
+        } finally {
+            setOrgLoading(false);
+        }
+    };
+
+    const handleSaveOrg = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setOrgSaving(true);
+        try {
+            const updates: Record<string, string> = { name: orgName };
+            if (orgMsg91Key) updates.msg91AuthKey = orgMsg91Key;
+            if (orgRazorpayKeyId) updates.razorpayKeyId = orgRazorpayKeyId;
+            if (orgRazorpayKeySecret) updates.razorpayKeySecret = orgRazorpayKeySecret;
+
+            await fetch("/api/organizations", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(updates),
+            });
+            fetchOrg();
+        } catch (e) {
+            console.error("Failed to save org:", e);
+        } finally {
+            setOrgSaving(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === "organization") fetchOrg();
+    }, [activeTab]);
+
     if (currentUser?.role !== "admin") {
         return (
             <div className="flex items-center justify-center h-full">
@@ -193,6 +260,16 @@ export default function SettingsPage() {
                 >
                     <User className="w-4 h-4 inline mr-2" />
                     WhatsApp Numbers
+                </button>
+                <button
+                    onClick={() => setActiveTab("organization")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "organization"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                        }`}
+                >
+                    <Building2 className="w-4 h-4 inline mr-2" />
+                    Organization
                 </button>
             </div>
 
@@ -482,6 +559,129 @@ export default function SettingsPage() {
 
             {activeTab === "numbers" && (
                 <NumbersTab />
+            )}
+
+            {activeTab === "organization" && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 max-w-2xl">
+                    {orgLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                        </div>
+                    ) : (
+                        <form onSubmit={handleSaveOrg} className="space-y-6">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-1">Organization Details</h3>
+                                <p className="text-sm text-slate-500">Manage your organization name and API integrations.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Organization Name</label>
+                                    <input
+                                        type="text"
+                                        value={orgName}
+                                        onChange={(e) => setOrgName(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Slug</label>
+                                    <input
+                                        type="text"
+                                        value={orgSlug}
+                                        disabled
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-6">
+                                <h4 className="text-sm font-semibold text-slate-800 mb-4">MSG91 Integration</h4>
+                                <div className="relative">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                        Auth Key
+                                        {orgHasMsg91Key && <span className="ml-2 text-xs text-emerald-600 font-normal">(configured)</span>}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showMsg91Key ? "text" : "password"}
+                                            value={orgMsg91Key}
+                                            onChange={(e) => setOrgMsg91Key(e.target.value)}
+                                            placeholder={orgHasMsg91Key ? "Leave blank to keep current key" : "Enter MSG91 auth key"}
+                                            className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMsg91Key(!showMsg91Key)}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                                        >
+                                            {showMsg91Key ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-6">
+                                <h4 className="text-sm font-semibold text-slate-800 mb-4">Razorpay Integration</h4>
+                                <div className="space-y-4">
+                                    <div className="relative">
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            Key ID
+                                            {orgHasRazorpayKeys && <span className="ml-2 text-xs text-emerald-600 font-normal">(configured)</span>}
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type={showRazorpayId ? "text" : "password"}
+                                                value={orgRazorpayKeyId}
+                                                onChange={(e) => setOrgRazorpayKeyId(e.target.value)}
+                                                placeholder={orgHasRazorpayKeys ? "Leave blank to keep current" : "rzp_live_..."}
+                                                className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowRazorpayId(!showRazorpayId)}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                                            >
+                                                {showRazorpayId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Key Secret</label>
+                                        <div className="relative">
+                                            <input
+                                                type={showRazorpaySecret ? "text" : "password"}
+                                                value={orgRazorpayKeySecret}
+                                                onChange={(e) => setOrgRazorpayKeySecret(e.target.value)}
+                                                placeholder={orgHasRazorpayKeys ? "Leave blank to keep current" : "Enter secret"}
+                                                className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowRazorpaySecret(!showRazorpaySecret)}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                                            >
+                                                {showRazorpaySecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={orgSaving}
+                                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
+                                >
+                                    {orgSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    {orgSaving ? "Saving..." : "Save Changes"}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
             )}
         </div>
     );

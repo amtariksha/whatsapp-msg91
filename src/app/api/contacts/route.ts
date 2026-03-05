@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 function mapContact(row: Record<string, unknown>) {
     return {
@@ -15,12 +16,16 @@ function mapContact(row: Record<string, unknown>) {
 
 // ─── GET /api/contacts ─────────────────────────────────────
 export async function GET(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase();
 
     let query = supabaseAdmin
         .from("contacts")
         .select("*")
+        .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
 
     if (search) {
@@ -41,11 +46,15 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/contacts ────────────────────────────────────
 export async function POST(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const body = await request.json();
 
     const { data, error } = await supabaseAdmin
         .from("contacts")
         .insert({
+            organization_id: orgId,
             name: body.name || "Unknown",
             phone: body.phone,
             email: body.email || null,

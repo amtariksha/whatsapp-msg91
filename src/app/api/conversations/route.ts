@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 // ─── Supabase row → app Contact type mapper ───────────────
 function mapContact(row: Record<string, unknown>) {
@@ -43,6 +44,9 @@ function mapConversation(row: Record<string, unknown>) {
 
 // ─── GET /api/conversations ────────────────────────────────
 export async function GET(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const search = searchParams.get("search")?.toLowerCase();
@@ -50,6 +54,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
         .from("conversations")
         .select("*, contacts(*)")
+        .eq("organization_id", orgId)
         .order("last_message_time", { ascending: false });
 
     if (status && status !== "all") {
@@ -83,11 +88,15 @@ export async function GET(request: NextRequest) {
 
 // ─── POST /api/conversations ───────────────────────────────
 export async function POST(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const body = await request.json();
 
     const { data, error } = await supabaseAdmin
         .from("conversations")
         .insert({
+            organization_id: orgId,
             contact_id: body.contactId,
             integrated_number: body.integratedNumber || "919999999999",
             status: "open",

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError, getRazorpayKeys } from "@/lib/org-helpers";
 
 // ─── POST /api/payments/[id]/sync ─────────────────────────────
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const { id } = await params;
 
     // 1. Fetch payment from DB
@@ -13,6 +17,7 @@ export async function POST(
         .from("payments")
         .select("*")
         .eq("id", id)
+        .eq("organization_id", orgId)
         .single();
 
     if (error || !payment) {
@@ -23,8 +28,7 @@ export async function POST(
         return NextResponse.json({ error: "No Razorpay link ID associated with this payment" }, { status: 400 });
     }
 
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const { keyId, keySecret } = await getRazorpayKeys(orgId);
 
     if (!keyId || !keySecret) {
         return NextResponse.json({ error: "Razorpay credentials not configured" }, { status: 500 });
@@ -72,7 +76,8 @@ export async function POST(
             await supabaseAdmin
                 .from("payments")
                 .update(updateData)
-                .eq("id", id);
+                .eq("id", id)
+                .eq("organization_id", orgId);
         }
 
         return NextResponse.json({

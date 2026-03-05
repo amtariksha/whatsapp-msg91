@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 import type { WhatsAppNumber } from "@/lib/types";
 
 /**
  * GET /api/numbers
- * Fetch configured numbers from the database. 
- * Fallback to MSG91_INTEGRATED_NUMBERS env var if the table is empty (for backward compatibility).
+ * Fetch configured numbers for the current organization.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     try {
         const { data: dbNumbers, error } = await supabaseAdmin
             .from("integrated_numbers")
             .select("*")
+            .eq("organization_id", orgId)
             .order("created_at", { ascending: true });
 
         if (error) {
@@ -19,36 +23,16 @@ export async function GET() {
             return NextResponse.json({ error: "Failed to fetch numbers" }, { status: 500 });
         }
 
-        let numbers: WhatsAppNumber[] = [];
-
-        if (dbNumbers && dbNumbers.length > 0) {
-            numbers = dbNumbers.map((dbNum, index) => ({
-                id: dbNum.id,
-                number: dbNum.number,
-                label: dbNum.label || `Number ${index + 1}`,
-                isDefault: index === 0, // First number is default
-                provider: dbNum.provider,
-                metaWabaId: dbNum.meta_waba_id,
-                metaPhoneNumberId: dbNum.meta_phone_number_id,
-                metaAccessToken: dbNum.meta_access_token,
-            }));
-        } else {
-            // Fallback to env var
-            const raw = process.env.MSG91_INTEGRATED_NUMBERS || "";
-            numbers = raw
-                .split(",")
-                .filter(Boolean)
-                .map((entry, index) => {
-                    const [number, label] = entry.split(":");
-                    return {
-                        id: `env-num-${index}`,
-                        number: number.trim(),
-                        label: label?.trim() || `Number ${index + 1}`,
-                        isDefault: index === 0,
-                        provider: "msg91",
-                    };
-                });
-        }
+        const numbers: WhatsAppNumber[] = (dbNumbers || []).map((dbNum, index) => ({
+            id: dbNum.id,
+            number: dbNum.number,
+            label: dbNum.label || `Number ${index + 1}`,
+            isDefault: index === 0,
+            provider: dbNum.provider,
+            metaWabaId: dbNum.meta_waba_id,
+            metaPhoneNumberId: dbNum.meta_phone_number_id,
+            metaAccessToken: dbNum.meta_access_token,
+        }));
 
         return NextResponse.json(numbers);
     } catch (err) {
@@ -62,6 +46,9 @@ export async function GET() {
  * Add a new integrated number.
  */
 export async function POST(req: NextRequest) {
+    const orgId = getOrgId(req);
+    if (!orgId) return orgError();
+
     try {
         const body = await req.json();
         const { number, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken } = body;
@@ -75,6 +62,7 @@ export async function POST(req: NextRequest) {
         const { data, error } = await supabaseAdmin
             .from("integrated_numbers")
             .insert([{
+                organization_id: orgId,
                 number: cleanNumber,
                 label,
                 provider: provider || "msg91",
@@ -102,6 +90,9 @@ export async function POST(req: NextRequest) {
  * Update an integrated number.
  */
 export async function PATCH(req: NextRequest) {
+    const orgId = getOrgId(req);
+    if (!orgId) return orgError();
+
     try {
         const body = await req.json();
         const { id, label, provider, metaWabaId, metaPhoneNumberId, metaAccessToken } = body;
@@ -120,6 +111,7 @@ export async function PATCH(req: NextRequest) {
                 meta_access_token: metaAccessToken,
             })
             .eq("id", id)
+            .eq("organization_id", orgId)
             .select()
             .single();
 
@@ -140,6 +132,9 @@ export async function PATCH(req: NextRequest) {
  * Delete an integrated number.
  */
 export async function DELETE(req: NextRequest) {
+    const orgId = getOrgId(req);
+    if (!orgId) return orgError();
+
     try {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get("id");
@@ -151,7 +146,8 @@ export async function DELETE(req: NextRequest) {
         const { error } = await supabaseAdmin
             .from("integrated_numbers")
             .delete()
-            .eq("id", id);
+            .eq("id", id)
+            .eq("organization_id", orgId);
 
         if (error) {
             console.error("Error deleting integrated_number:", error);

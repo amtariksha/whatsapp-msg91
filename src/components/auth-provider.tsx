@@ -15,6 +15,8 @@ interface User {
     name: string;
     email: string;
     role: string;
+    organizationId: string;
+    organizationName: string;
 }
 
 interface AuthContextValue {

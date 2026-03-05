@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { hashPassword } from "@/lib/auth";
+import { getOrgId, orgError } from "@/lib/org-helpers";
 
 // ─── PATCH /api/users/[id] — Update user ──────────────────
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const role = request.headers.get("x-user-role");
     if (role !== "admin") {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
@@ -28,6 +32,7 @@ export async function PATCH(
         .from("users")
         .update(updates)
         .eq("id", id)
+        .eq("organization_id", orgId)
         .select("id, name, email, role, is_active, created_at")
         .single();
 
@@ -44,6 +49,9 @@ export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const orgId = getOrgId(request);
+    if (!orgId) return orgError();
+
     const role = request.headers.get("x-user-role");
     if (role !== "admin") {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
@@ -60,7 +68,7 @@ export async function DELETE(
         );
     }
 
-    const { error } = await supabaseAdmin.from("users").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("users").delete().eq("id", id).eq("organization_id", orgId);
 
     if (error) {
         console.error("User delete error:", error);
