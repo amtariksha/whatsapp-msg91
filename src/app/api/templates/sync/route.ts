@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     try {
         // Fetch templates from MSG91
         const response = await fetch(
-            "https://api.msg91.com/api/v5/whatsapp/getTemplates",
+            "https://control.msg91.com/api/v5/whatsapp/getTemplates",
             {
                 headers: {
                     authkey: authKey,
