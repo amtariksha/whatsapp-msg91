@@ -18,10 +18,12 @@ import {
     Wallet,
     RefreshCw,
     Building2,
+    HelpCircle,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useSettings, useUpdateSettings, useFetchMsg91Numbers, useBalance } from "@/lib/hooks";
 import { MetaEmbeddedSignup } from "@/components/meta-embedded-signup";
+import { SetupGuideDialog } from "@/components/settings/setup-guide-dialog";
 
 interface UserRecord {
     id: string;
@@ -1155,6 +1157,7 @@ function NumbersTab() {
     const [metaAccessToken, setMetaAccessToken] = useState("");
     const [selectedOrgId, setSelectedOrgId] = useState("");
     const [saving, setSaving] = useState(false);
+    const [guideProvider, setGuideProvider] = useState<"msg91" | "meta" | null>(null);
 
     const fetchMsg91 = useFetchMsg91Numbers();
 
@@ -1408,6 +1411,9 @@ function NumbersTab() {
                                         className="text-emerald-600 focus:ring-emerald-500"
                                     />
                                     <span className="text-sm text-slate-700 font-medium">MSG91 API</span>
+                                    <button type="button" onClick={(e) => { e.preventDefault(); setGuideProvider("msg91"); }} title="MSG91 setup guide">
+                                        <HelpCircle className="w-4 h-4 text-slate-400 hover:text-purple-600 transition-colors" />
+                                    </button>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -1419,8 +1425,12 @@ function NumbersTab() {
                                         className="text-emerald-600 focus:ring-emerald-500"
                                     />
                                     <span className="text-sm text-slate-700 font-medium">Direct Meta Cloud API</span>
+                                    <button type="button" onClick={(e) => { e.preventDefault(); setGuideProvider("meta"); }} title="Meta setup guide">
+                                        <HelpCircle className="w-4 h-4 text-slate-400 hover:text-blue-600 transition-colors" />
+                                    </button>
                                 </label>
                             </div>
+                            <SetupGuideDialog provider={guideProvider} onClose={() => setGuideProvider(null)} />
                         </div>
 
                         {provider === "meta" && (
