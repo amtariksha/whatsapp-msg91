@@ -122,8 +122,8 @@ export async function POST(request: NextRequest) {
         sendViaWhatsApp,
     } = body;
 
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const keyId = await getAppSetting("razorpay_key_id", process.env.RAZORPAY_KEY_ID || "", orgId);
+    const keySecret = await getAppSetting("razorpay_key_secret", process.env.RAZORPAY_KEY_SECRET || "", orgId);
 
     let razorpayLinkId: string | null = null;
     let shortUrl: string | null = null;
@@ -224,8 +224,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (sendViaWhatsApp && shortUrl) {
-        const msgAuthKey = process.env.MSG91_AUTH_KEY;
-        const sendFromNumber = integratedNumber || process.env.MSG91_INTEGRATED_NUMBER || "919999999999";
+        const msgAuthKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
+        const sendFromNumber = integratedNumber || "919999999999";
         const cleanPhone = phone.replace(/^\+/, "");
         const messageText = `💰 Payment Link\n\nAmount: ₹${amount.toLocaleString("en-IN")}\n${description ? `For: ${description}\n` : ""}\nPay here: ${shortUrl}`;
 

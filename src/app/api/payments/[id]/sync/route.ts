@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getRequestContext } from "@/lib/request";
+import { getAppSetting } from "@/lib/settings";
 
 // ─── POST /api/payments/[id]/sync ─────────────────────────────
 export async function POST(
@@ -26,11 +27,11 @@ export async function POST(
         return NextResponse.json({ error: "No Razorpay link ID associated with this payment" }, { status: 400 });
     }
 
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const keyId = await getAppSetting("razorpay_key_id", process.env.RAZORPAY_KEY_ID || "", orgId);
+    const keySecret = await getAppSetting("razorpay_key_secret", process.env.RAZORPAY_KEY_SECRET || "", orgId);
 
     if (!keyId || !keySecret) {
-        return NextResponse.json({ error: "Razorpay credentials not configured" }, { status: 500 });
+        return NextResponse.json({ error: "Razorpay credentials not configured. Set them in Settings or as environment variables." }, { status: 500 });
     }
 
     try {

@@ -5,8 +5,7 @@ import type { WhatsAppNumber } from "@/lib/types";
 
 /**
  * GET /api/numbers
- * Fetch configured numbers from the database. 
- * Fallback to MSG91_INTEGRATED_NUMBERS env var if the table is empty (for backward compatibility).
+ * Fetch configured numbers from the database.
  */
 export async function GET(request: NextRequest) {
     const { orgId, isSuperAdmin } = getRequestContext(request.headers);
@@ -42,22 +41,6 @@ export async function GET(request: NextRequest) {
                 metaAccessToken: dbNum.meta_access_token,
                 orgId: dbNum.org_id,
             }));
-        } else {
-            // Fallback to env var
-            const raw = process.env.MSG91_INTEGRATED_NUMBERS || "";
-            numbers = raw
-                .split(",")
-                .filter(Boolean)
-                .map((entry, index) => {
-                    const [number, label] = entry.split(":");
-                    return {
-                        id: `env-num-${index}`,
-                        number: number.trim(),
-                        label: label?.trim() || `Number ${index + 1}`,
-                        isDefault: index === 0,
-                        provider: "msg91",
-                    };
-                });
         }
 
         return NextResponse.json(numbers);
@@ -175,15 +158,6 @@ export async function DELETE(req: NextRequest) {
 
         if (!id) {
             return NextResponse.json({ error: "Number ID is required" }, { status: 400 });
-        }
-
-        // Validate UUID format — env var fallback numbers have IDs like "env-num-0"
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!uuidRegex.test(id)) {
-            return NextResponse.json(
-                { error: "This number is loaded from environment config and cannot be deleted here. Remove it from the MSG91_INTEGRATED_NUMBERS environment variable instead." },
-                { status: 400 }
-            );
         }
 
         let query = supabaseAdmin

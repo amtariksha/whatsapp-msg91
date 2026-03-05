@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestContext } from "@/lib/request";
+import { getAppSetting } from "@/lib/settings";
 
 // ─── POST /api/templates/sync ───────────────────────────────
 // Sync templates with MSG91 / Meta
 export async function POST(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
-    const authKey = process.env.MSG91_AUTH_KEY;
+    const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
     if (!authKey) {
         return NextResponse.json(
             { error: "MSG91_AUTH_KEY not configured" },

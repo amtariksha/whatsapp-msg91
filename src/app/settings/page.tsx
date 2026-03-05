@@ -23,7 +23,7 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { useSettings, useUpdateSettings, useFetchMsg91Numbers, useBalance } from "@/lib/hooks";
 import { MetaEmbeddedSignup } from "@/components/meta-embedded-signup";
-import { SetupGuideDialog } from "@/components/settings/setup-guide-dialog";
+import { SetupGuideDialog, type GuideKey } from "@/components/settings/setup-guide-dialog";
 
 interface UserRecord {
     id: string;
@@ -600,6 +600,9 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
 
     const [paymentTemplateName, setPaymentTemplateName] = useState("");
     const [catalogId, setCatalogId] = useState("");
+    const [msg91AuthKey, setMsg91AuthKey] = useState("");
+    const [razorpayKeyId, setRazorpayKeyId] = useState("");
+    const [razorpayKeySecret, setRazorpayKeySecret] = useState("");
     const [contactsPageSize, setContactsPageSize] = useState("25");
     const [paymentsPageSize, setPaymentsPageSize] = useState("20");
     const [facebookAppId, setFacebookAppId] = useState("");
@@ -607,6 +610,7 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
     const [facebookOauthRedirectUri, setFacebookOauthRedirectUri] = useState("");
     const [metaApiVersion, setMetaApiVersion] = useState("v21.0");
     const [saved, setSaved] = useState(false);
+    const [settingsGuideKey, setSettingsGuideKey] = useState<GuideKey | null>(null);
 
     // Update selectedOrgId when orgs first load
     useEffect(() => {
@@ -619,6 +623,9 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
         if (settings) {
             setPaymentTemplateName(settings.payment_template_name || "");
             setCatalogId(settings.whatsapp_catalog_id || "");
+            setMsg91AuthKey(settings.msg91_auth_key || "");
+            setRazorpayKeyId(settings.razorpay_key_id || "");
+            setRazorpayKeySecret(settings.razorpay_key_secret || "");
             setContactsPageSize(settings.contacts_page_size || "25");
             setPaymentsPageSize(settings.payments_page_size || "20");
             setFacebookAppId(settings.facebook_app_id || "");
@@ -636,6 +643,9 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
         const orgSettings: Record<string, string> = {
             payment_template_name: paymentTemplateName,
             whatsapp_catalog_id: catalogId,
+            msg91_auth_key: msg91AuthKey,
+            razorpay_key_id: razorpayKeyId,
+            razorpay_key_secret: razorpayKeySecret,
             contacts_page_size: String(Math.min(100, Math.max(5, parseInt(contactsPageSize) || 25))),
             payments_page_size: String(Math.min(100, Math.max(5, parseInt(paymentsPageSize) || 20))),
         };
@@ -702,6 +712,70 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
                 </p>
 
                 <div className="space-y-6">
+                    {/* MSG91 Auth Key */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+                        MSG91 Configuration
+                        <button type="button" onClick={() => setSettingsGuideKey("msg91_auth_key")} title="MSG91 Auth Key setup guide">
+                            <HelpCircle className="w-4 h-4 text-slate-400 hover:text-purple-600 transition-colors" />
+                        </button>
+                    </h3>
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            MSG91 Auth Key
+                        </label>
+                        <input
+                            type="password"
+                            value={msg91AuthKey}
+                            onChange={(e) => setMsg91AuthKey(e.target.value)}
+                            placeholder="Enter org-specific MSG91 auth key"
+                            className="w-full max-w-md px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1.5">
+                            Per-organization MSG91 auth key. If empty, falls back to the global MSG91_AUTH_KEY environment variable.
+                        </p>
+                    </div>
+                </div>
+
+                    {/* Razorpay Settings */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+                        Razorpay Payment Gateway
+                        <button type="button" onClick={() => setSettingsGuideKey("razorpay")} title="Razorpay setup guide">
+                            <HelpCircle className="w-4 h-4 text-slate-400 hover:text-blue-600 transition-colors" />
+                        </button>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Razorpay Key ID
+                            </label>
+                            <input
+                                type="text"
+                                value={razorpayKeyId}
+                                onChange={(e) => setRazorpayKeyId(e.target.value)}
+                                placeholder="rzp_live_..."
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Razorpay Key Secret
+                            </label>
+                            <input
+                                type="password"
+                                value={razorpayKeySecret}
+                                onChange={(e) => setRazorpayKeySecret(e.target.value)}
+                                placeholder="••••••••••••••••"
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            />
+                        </div>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-2">
+                        Per-organization Razorpay credentials for creating payment links. If empty, falls back to RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET environment variables.
+                    </p>
+                </div>
+
                     {/* WhatsApp Settings */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                     <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
@@ -709,8 +783,11 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
                     </h3>
                     <div className="space-y-5">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 mb-1">
                                 Payment Template Name
+                                <button type="button" onClick={() => setSettingsGuideKey("payment_template")} title="Payment template setup guide">
+                                    <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-amber-600 transition-colors" />
+                                </button>
                             </label>
                             <input
                                 type="text"
@@ -872,6 +949,7 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
                 )}
             </div>
         </form>
+        <SetupGuideDialog guideKey={settingsGuideKey} onClose={() => setSettingsGuideKey(null)} />
         </div>
     );
 }
@@ -1157,7 +1235,7 @@ function NumbersTab() {
     const [metaAccessToken, setMetaAccessToken] = useState("");
     const [selectedOrgId, setSelectedOrgId] = useState("");
     const [saving, setSaving] = useState(false);
-    const [guideProvider, setGuideProvider] = useState<"msg91" | "meta" | null>(null);
+    const [guideKey, setGuideKey] = useState<GuideKey | null>(null);
 
     const fetchMsg91 = useFetchMsg91Numbers();
 
@@ -1411,7 +1489,7 @@ function NumbersTab() {
                                         className="text-emerald-600 focus:ring-emerald-500"
                                     />
                                     <span className="text-sm text-slate-700 font-medium">MSG91 API</span>
-                                    <button type="button" onClick={(e) => { e.preventDefault(); setGuideProvider("msg91"); }} title="MSG91 setup guide">
+                                    <button type="button" onClick={(e) => { e.preventDefault(); setGuideKey("msg91"); }} title="MSG91 setup guide">
                                         <HelpCircle className="w-4 h-4 text-slate-400 hover:text-purple-600 transition-colors" />
                                     </button>
                                 </label>
@@ -1425,12 +1503,12 @@ function NumbersTab() {
                                         className="text-emerald-600 focus:ring-emerald-500"
                                     />
                                     <span className="text-sm text-slate-700 font-medium">Direct Meta Cloud API</span>
-                                    <button type="button" onClick={(e) => { e.preventDefault(); setGuideProvider("meta"); }} title="Meta setup guide">
+                                    <button type="button" onClick={(e) => { e.preventDefault(); setGuideKey("meta"); }} title="Meta setup guide">
                                         <HelpCircle className="w-4 h-4 text-slate-400 hover:text-blue-600 transition-colors" />
                                     </button>
                                 </label>
                             </div>
-                            <SetupGuideDialog provider={guideProvider} onClose={() => setGuideProvider(null)} />
+                            <SetupGuideDialog guideKey={guideKey} onClose={() => setGuideKey(null)} />
                         </div>
 
                         {provider === "meta" && (

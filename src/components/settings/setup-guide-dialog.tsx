@@ -14,6 +14,13 @@ interface Step {
   instructions: (string | { text: string; href: string })[];
 }
 
+interface Guide {
+  title: string;
+  description: string;
+  steps: Step[];
+  color: string;
+}
+
 const metaSteps: Step[] = [
   {
     title: "Create a Meta App",
@@ -95,7 +102,7 @@ const msg91Steps: Step[] = [
     instructions: [
       { text: "Go to your MSG91 dashboard → API Keys / Auth Keys.", href: "https://control.msg91.com/app/api-keys" },
       "Copy your Auth Key.",
-      "Add it to your .env.local file as MSG91_AUTH_KEY=your_key_here.",
+      "Paste it in the MSG91 Auth Key field in this Settings panel (per-org), or set MSG91_AUTH_KEY in .env.local as a global fallback.",
     ],
   },
   {
@@ -124,7 +131,106 @@ const msg91Steps: Step[] = [
   },
 ];
 
-const guides: Record<string, { title: string; description: string; steps: Step[]; color: string }> = {
+const paymentTemplateSteps: Step[] = [
+  {
+    title: "Create the Template in MSG91",
+    instructions: [
+      { text: "Go to the MSG91 WhatsApp Templates section.", href: "https://control.msg91.com/app/whatsapp" },
+      "Click Create Template or use the Templates tab in this app.",
+      "Create a template with exactly 3 body variables for payment links.",
+    ],
+  },
+  {
+    title: "Template Variable Format",
+    instructions: [
+      "Variable {{1}} = Payment amount (e.g. \"₹500\").",
+      "Variable {{2}} = Payment description (e.g. \"Invoice #1234\").",
+      "Variable {{3}} = Payment link URL (e.g. \"https://rzp.io/i/abc123\").",
+      "Example template body: \"Please pay {{1}} for {{2}}. Click here to pay: {{3}}\"",
+    ],
+  },
+  {
+    title: "Wait for Approval",
+    instructions: [
+      "Submit the template for Meta/WhatsApp approval.",
+      "Approval usually takes a few minutes to a few hours.",
+      "Once approved, the template status will show as \"APPROVED\" in the Templates tab.",
+    ],
+  },
+  {
+    title: "Enter the Template Name Here",
+    instructions: [
+      "Copy the exact template name (e.g. \"payment_link_v1\") — not the display name.",
+      "Paste it into the Payment Template Name field in this settings panel.",
+      "This template is used automatically when sending a payment link outside the 24-hour WhatsApp session window.",
+    ],
+  },
+];
+
+const razorpaySteps: Step[] = [
+  {
+    title: "Create a Razorpay Account",
+    instructions: [
+      { text: "Go to the Razorpay Dashboard and sign up or log in.", href: "https://dashboard.razorpay.com/" },
+      "Complete KYC verification if you haven't already.",
+    ],
+  },
+  {
+    title: "Get API Keys",
+    instructions: [
+      { text: "Go to Settings → API Keys in the Razorpay Dashboard.", href: "https://dashboard.razorpay.com/app/website-app-settings/api-keys" },
+      "Click Generate Key to create a new key pair.",
+      "Copy the Key ID (starts with \"rzp_live_\" or \"rzp_test_\").",
+      "Copy the Key Secret — you will only see it once, so save it immediately.",
+    ],
+  },
+  {
+    title: "Configure in This App",
+    instructions: [
+      "Paste the Razorpay Key ID and Key Secret into the fields below.",
+      "These are saved per-organization, so each org can have its own Razorpay account.",
+      "Alternatively, set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env.local as a global fallback.",
+    ],
+  },
+  {
+    title: "Configure Razorpay Webhook (Optional)",
+    instructions: [
+      "In Razorpay Dashboard → Settings → Webhooks, click Add New Webhook.",
+      "Set Webhook URL to: https://your-domain.com/api/webhooks/razorpay",
+      "Select events: payment_link.paid, payment_link.expired, payment_link.cancelled.",
+      "Set the Webhook Secret to your RAZORPAY_KEY_SECRET value.",
+      "This enables automatic payment status updates in the app.",
+    ],
+  },
+];
+
+const msg91AuthKeySteps: Step[] = [
+  {
+    title: "Find Your MSG91 Auth Key",
+    instructions: [
+      { text: "Log in to the MSG91 Dashboard.", href: "https://control.msg91.com/" },
+      { text: "Go to API Keys / Auth Keys section.", href: "https://control.msg91.com/app/api-keys" },
+      "Copy the Auth Key shown on the page.",
+    ],
+  },
+  {
+    title: "Enter It Here",
+    instructions: [
+      "Paste your MSG91 Auth Key into the field below.",
+      "This key is saved per-organization — each org can use a different MSG91 account.",
+      "If left empty, the app falls back to the global MSG91_AUTH_KEY environment variable.",
+    ],
+  },
+  {
+    title: "Verify",
+    instructions: [
+      "After saving, try sending a test message or click \"Fetch from MSG91\" in the WhatsApp Numbers tab.",
+      "If the key is invalid, API calls will return authentication errors.",
+    ],
+  },
+];
+
+const guides: Record<string, Guide> = {
   meta: {
     title: "Meta WhatsApp Cloud API Setup",
     description: "Follow these steps to configure your Meta Developer account and generate the credentials needed for the Direct Meta Cloud API provider.",
@@ -137,21 +243,42 @@ const guides: Record<string, { title: string; description: string; steps: Step[]
     steps: msg91Steps,
     color: "bg-purple-600",
   },
+  payment_template: {
+    title: "Payment Template Setup",
+    description: "Set up a WhatsApp message template for sending payment links when the 24-hour session window has expired.",
+    steps: paymentTemplateSteps,
+    color: "bg-amber-600",
+  },
+  razorpay: {
+    title: "Razorpay Setup",
+    description: "Configure Razorpay payment gateway credentials to create and manage payment links via WhatsApp.",
+    steps: razorpaySteps,
+    color: "bg-blue-700",
+  },
+  msg91_auth_key: {
+    title: "MSG91 Auth Key Setup",
+    description: "Configure your organization's MSG91 authentication key for sending WhatsApp messages and accessing MSG91 APIs.",
+    steps: msg91AuthKeySteps,
+    color: "bg-purple-600",
+  },
 };
 
+export type GuideKey = keyof typeof guides;
+
 export function SetupGuideDialog({
-  provider,
+  guideKey,
   onClose,
 }: {
-  provider: "msg91" | "meta" | null;
+  guideKey: GuideKey | null;
   onClose: () => void;
 }) {
-  if (!provider) return null;
+  if (!guideKey) return null;
 
-  const guide = guides[provider];
+  const guide = guides[guideKey];
+  if (!guide) return null;
 
   return (
-    <Dialog open={!!provider} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={!!guideKey} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] p-0">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="text-lg font-bold text-slate-800">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getRequestContext } from "@/lib/request";
+import { getAppSetting } from "@/lib/settings";
 
 /**
  * Extract named variables from body text and map them to numbered {{1}}, {{2}}, etc.
@@ -39,10 +40,10 @@ export async function POST(
     const { orgId } = getRequestContext(request.headers);
     const { id } = await params;
 
-    const authKey = process.env.MSG91_AUTH_KEY;
+    const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
     if (!authKey) {
         return NextResponse.json(
-            { error: "MSG91_AUTH_KEY not configured" },
+            { error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." },
             { status: 500 }
         );
     }
@@ -58,13 +59,6 @@ export async function POST(
         .maybeSingle();
     if (dbNumbers?.number) {
         integratedNumber = dbNumbers.number;
-    } else {
-        integratedNumber = (process.env.MSG91_INTEGRATED_NUMBER || "").replace(/^\+/, "");
-        if (!integratedNumber) {
-            const envNumbers = process.env.MSG91_INTEGRATED_NUMBERS || "";
-            const firstEntry = envNumbers.split(",")[0] || "";
-            integratedNumber = firstEntry.split(":")[0].trim().replace(/^\+/, "");
-        }
     }
 
     // Fetch the local template
