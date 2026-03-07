@@ -11,7 +11,16 @@ import { getAppSetting } from "@/lib/settings";
 export async function GET(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
     try {
-        const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
+        // Resolve auth key: app_settings → organizations table → env var
+        let authKey = await getAppSetting("msg91_auth_key", "", orgId);
+        if (!authKey) {
+            const { data: orgRow } = await supabaseAdmin
+                .from("organizations")
+                .select("msg91_auth_key")
+                .eq("id", orgId)
+                .maybeSingle();
+            authKey = orgRow?.msg91_auth_key || process.env.MSG91_AUTH_KEY || "";
+        }
 
         if (!authKey) {
             return NextResponse.json(
@@ -20,16 +29,19 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Get the org's integrated number (required by this MSG91 endpoint)
+        // Get the org's integrated number — prefer msg91 provider numbers for this endpoint
         const { data: numRow } = await supabaseAdmin
             .from("integrated_numbers")
-            .select("number")
+            .select("number, provider")
             .eq("org_id", orgId)
             .eq("active", true)
-            .limit(1)
-            .maybeSingle();
+            .order("created_at", { ascending: true })
+            .limit(10);
 
-        const integratedNumber = numRow?.number || "";
+        // Prefer an MSG91-provider number; fall back to any number
+        const msg91Num = (numRow || []).find((n: any) => !n.provider || n.provider === "msg91");
+        const anyNum = (numRow || [])[0];
+        const integratedNumber = msg91Num?.number || anyNum?.number || "";
 
         if (!integratedNumber) {
             return NextResponse.json(
@@ -38,6 +50,7 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        console.log(`[GET Templates] Fetching for number: ${integratedNumber}, orgId: ${orgId}`);
         const url = `https://control.msg91.com/api/v5/whatsapp/get-template-client/${integratedNumber}`;
 
         const response = await fetch(url, {
@@ -51,14 +64,23 @@ export async function GET(request: NextRequest) {
 
         if (!response.ok) {
             console.error("[GET Templates] MSG91 error:", response.status, JSON.stringify(data));
+            console.error(`[GET Templates] Number used: ${integratedNumber}, authKey ending: ...${authKey.slice(-6)}`);
             return NextResponse.json(
-                { error: `Failed to fetch templates from MSG91 (${response.status})` },
+                { error: `Failed to fetch templates from MSG91 (${response.status}): ${JSON.stringify(data)}` },
                 { status: 502 }
             );
         }
 
         // If MSG91 returns an array, return it directly; otherwise unwrap
-        const templates = Array.isArray(data) ? data : data.data || data.templates || [];
+        const rawTemplates = Array.isArray(data) ? data : data.data || data.templates || [];
+
+        // Normalize fields: MSG91 may return status/category in uppercase
+        const templates = rawTemplates.map((t: Record<string, unknown>) => ({
+            ...t,
+            status: ((t.status as string) || "").toLowerCase(),
+            category: ((t.category as string) || "MARKETING").toUpperCase(),
+        }));
+
         return NextResponse.json(templates);
     } catch (err) {
         console.error("[GET Templates] Error:", err);

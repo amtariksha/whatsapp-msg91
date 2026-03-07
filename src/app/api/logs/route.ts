@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 import { getRequestContext } from "@/lib/request";
 import { getAppSetting } from "@/lib/settings";
 
@@ -6,7 +7,17 @@ import { getAppSetting } from "@/lib/settings";
 // Fetch WhatsApp delivery logs from MSG91
 export async function GET(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
-    const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
+
+    // Resolve auth key: app_settings → organizations table → env var
+    let authKey = await getAppSetting("msg91_auth_key", "", orgId);
+    if (!authKey) {
+        const { data: orgRow } = await supabaseAdmin
+            .from("organizations")
+            .select("msg91_auth_key")
+            .eq("id", orgId)
+            .maybeSingle();
+        authKey = orgRow?.msg91_auth_key || process.env.MSG91_AUTH_KEY || "";
+    }
     if (!authKey) {
         return NextResponse.json(
             { error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." },

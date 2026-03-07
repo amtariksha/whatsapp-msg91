@@ -18,7 +18,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const MSG91_AUTH_KEY = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
+        // Check app_settings first, then organizations table, then env var
+        let MSG91_AUTH_KEY = await getAppSetting("msg91_auth_key", "", orgId);
+        if (!MSG91_AUTH_KEY) {
+            // Fallback: check organizations table for org-specific auth key
+            const { data: orgRow } = await supabaseAdmin
+                .from("organizations")
+                .select("msg91_auth_key")
+                .eq("id", orgId)
+                .maybeSingle();
+            MSG91_AUTH_KEY = orgRow?.msg91_auth_key || process.env.MSG91_AUTH_KEY || "";
+        }
         if (!MSG91_AUTH_KEY) {
             console.error("[Broadcast API] MSG91 Auth Key is missing");
             return NextResponse.json(

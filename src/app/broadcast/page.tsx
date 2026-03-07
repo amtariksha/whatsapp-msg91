@@ -48,7 +48,7 @@ export default function BroadcastPage() {
     const [csvFileName, setCsvFileName] = useState("");
     const [isSending, setIsSending] = useState(false);
 
-    const approvedTemplates = templates?.filter((t) => t.status === "approved");
+    const approvedTemplates = templates?.filter((t) => t.status?.toLowerCase() === "approved");
 
     const bodyComponent = selectedTemplate?.components.find(
         (c) => c.type === "BODY"

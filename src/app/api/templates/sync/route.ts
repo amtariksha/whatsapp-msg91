@@ -8,7 +8,17 @@ import { getAppSetting } from "@/lib/settings";
 // updates local template statuses (pending → approved/rejected).
 export async function POST(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
-    const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
+
+    // Resolve auth key: app_settings → organizations table → env var
+    let authKey = await getAppSetting("msg91_auth_key", "", orgId);
+    if (!authKey) {
+        const { data: orgRow } = await supabaseAdmin
+            .from("organizations")
+            .select("msg91_auth_key")
+            .eq("id", orgId)
+            .maybeSingle();
+        authKey = orgRow?.msg91_auth_key || process.env.MSG91_AUTH_KEY || "";
+    }
     if (!authKey) {
         return NextResponse.json(
             { error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." },
@@ -17,16 +27,18 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        // Get the org's integrated number (required by MSG91 get-template-client endpoint)
-        const { data: numRow } = await supabaseAdmin
+        // Get the org's integrated number — prefer msg91 provider for this endpoint
+        const { data: numRows } = await supabaseAdmin
             .from("integrated_numbers")
-            .select("number")
+            .select("number, provider")
             .eq("org_id", orgId)
             .eq("active", true)
-            .limit(1)
-            .maybeSingle();
+            .order("created_at", { ascending: true })
+            .limit(10);
 
-        const integratedNumber = numRow?.number || "";
+        const msg91Num = (numRows || []).find((n: any) => !n.provider || n.provider === "msg91");
+        const anyNum = (numRows || [])[0];
+        const integratedNumber = msg91Num?.number || anyNum?.number || "";
 
         if (!integratedNumber) {
             return NextResponse.json(
@@ -64,11 +76,11 @@ export async function POST(request: NextRequest) {
             language: t.language || "en",
         }));
 
-        // Update local templates_local statuses from MSG91 remote status
-        // Match by name (or msg91_template_id) and update status
+        // Update local templates_local statuses AND categories from MSG91 remote
+        // Match by name (or msg91_template_id) and update status + category
         const { data: localTemplates } = await supabaseAdmin
             .from("templates_local")
-            .select("id, name, status, msg91_template_id")
+            .select("id, name, status, category, msg91_template_id")
             .eq("org_id", orgId);
 
         let updated = 0;
@@ -80,18 +92,34 @@ export async function POST(request: NextRequest) {
                     r.name === local.name
             );
 
-            if (remote && remote.status !== local.status) {
+            if (!remote) continue;
+
+            // Check if status or category changed
+            const remoteCategory = ((remote.category as string) || "").toUpperCase();
+            const localCategory = ((local.category as string) || "").toUpperCase();
+            const statusChanged = remote.status !== local.status;
+            const categoryChanged = remoteCategory && remoteCategory !== localCategory;
+
+            if (statusChanged || categoryChanged) {
+                const updateData: Record<string, unknown> = {
+                    msg91_template_id: remote.id || local.msg91_template_id,
+                    updated_at: new Date().toISOString(),
+                };
+                if (statusChanged) updateData.status = remote.status;
+                if (categoryChanged) updateData.category = remoteCategory;
+
                 const { error: updateErr } = await supabaseAdmin
                     .from("templates_local")
-                    .update({
-                        status: remote.status,
-                        msg91_template_id: remote.id || local.msg91_template_id,
-                        updated_at: new Date().toISOString(),
-                    })
+                    .update(updateData)
                     .eq("id", local.id);
 
-                if (!updateErr) updated++;
-                else console.warn("[Template Sync] Update error for", local.name, updateErr.message);
+                if (!updateErr) {
+                    updated++;
+                    if (statusChanged) console.log(`[Template Sync] ${local.name}: status ${local.status} → ${remote.status}`);
+                    if (categoryChanged) console.log(`[Template Sync] ${local.name}: category ${localCategory} → ${remoteCategory}`);
+                } else {
+                    console.warn("[Template Sync] Update error for", local.name, updateErr.message);
+                }
             }
         }
 

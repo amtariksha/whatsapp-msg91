@@ -16,25 +16,52 @@ export async function POST(request: NextRequest) {
 
     // Clean phone number (remove + prefix if present)
     const phone = to.replace(/^\+/, "");
-    const sendFromNumber = integratedNumber;
-    if (!sendFromNumber) {
-        return NextResponse.json({ error: "No integrated number specified" }, { status: 400 });
+
+    // ─── Resolve the sending number ────────────────────────────
+    // The frontend sends activeNumber?.number || conversation.integratedNumber
+    // Old conversations may have "default" or stale values, so we resolve properly
+    let sendFromNumber = integratedNumber;
+    let numConfig: Record<string, any> | null = null;
+
+    // Try to find the specified number in DB
+    if (sendFromNumber && sendFromNumber !== "default") {
+        let numQuery = supabaseAdmin
+            .from("integrated_numbers")
+            .select("*")
+            .eq("number", sendFromNumber);
+
+        if (!isSuperAdmin) {
+            numQuery = numQuery.eq("org_id", orgId);
+        }
+
+        const { data } = await numQuery.maybeSingle();
+        numConfig = data;
     }
 
-    // ─── Fetch number config from DB (scoped to org) ─────────
-    let numQuery = supabaseAdmin
-        .from("integrated_numbers")
-        .select("*")
-        .eq("number", sendFromNumber);
+    // If number not found or was "default", fall back to org's first active number
+    if (!numConfig) {
+        const { data: fallbackNum } = await supabaseAdmin
+            .from("integrated_numbers")
+            .select("*")
+            .eq("org_id", orgId)
+            .eq("active", true)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
 
-    if (!isSuperAdmin) {
-        numQuery = numQuery.eq("org_id", orgId);
+        if (fallbackNum) {
+            numConfig = fallbackNum;
+            sendFromNumber = fallbackNum.number;
+            console.log(`[Chat Send] Resolved sending number to: ${sendFromNumber} (provider: ${fallbackNum.provider})`);
+        }
     }
 
-    const { data: numConfig } = await numQuery.single();
+    if (!sendFromNumber || sendFromNumber === "default") {
+        return NextResponse.json({ error: "No integrated number configured. Add one in Settings → WhatsApp Numbers." }, { status: 400 });
+    }
 
-    // Default to msg91 if not found in db
     const provider = numConfig?.provider || "msg91";
+    console.log(`[Chat Send] Using provider: ${provider}, number: ${sendFromNumber}`);
 
     // MSG91 has two different APIs:
     //   Template messages → POST .../whatsapp-outbound-message/bulk/  (nested payload with to_and_components)
@@ -226,7 +253,35 @@ export async function POST(request: NextRequest) {
         }
     } else {
         // ─── Send via MSG91 ──────────────────────────────────────
-        const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
+        // Check app_settings first, then organizations table, then env var
+        let authKey = "";
+        let authKeySource = "";
+
+        const appSettingKey = await getAppSetting("msg91_auth_key", "", orgId);
+        if (appSettingKey) {
+            authKey = appSettingKey;
+            authKeySource = "app_settings";
+        }
+
+        if (!authKey) {
+            const { data: orgRow } = await supabaseAdmin
+                .from("organizations")
+                .select("msg91_auth_key")
+                .eq("id", orgId)
+                .maybeSingle();
+            if (orgRow?.msg91_auth_key) {
+                authKey = orgRow.msg91_auth_key;
+                authKeySource = "organizations_table";
+            }
+        }
+
+        if (!authKey && process.env.MSG91_AUTH_KEY) {
+            authKey = process.env.MSG91_AUTH_KEY;
+            authKeySource = "env_var";
+        }
+
+        console.log(`[Chat Send] Auth key source: ${authKeySource}, ending: ...${authKey.slice(-6)}, orgId: ${orgId}`);
+
         if (!authKey) {
             return NextResponse.json({ error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." }, { status: 500 });
         }
@@ -239,7 +294,7 @@ export async function POST(request: NextRequest) {
                 {
                     method: "POST",
                     headers: {
-                        Authkey: authKey,
+                        authkey: authKey,
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify(msg91Payload),
@@ -255,8 +310,12 @@ export async function POST(request: NextRequest) {
                 finalStatus = "failed";
             } else if (typeof finalResponse === "object" && finalResponse !== null && (finalResponse as any).hasError) {
                 // MSG91 sometimes returns 200 with { hasError: true, errors: "..." }
+                const errMsg = (finalResponse as any).errors || "";
                 console.error("[Chat Send] MSG91 API error:", responseText);
                 console.error("[Chat Send] Payload was:", JSON.stringify(msg91Payload, null, 2));
+                if (errMsg.includes("not integrated")) {
+                    console.error(`[Chat Send] Number ${sendFromNumber} is not integrated on MSG91. Verify the number is activated on your MSG91 account, or check if this number uses Meta provider instead.`);
+                }
                 finalStatus = "failed";
             } else {
                 console.log("[Chat Send] MSG91 success:", responseText);
