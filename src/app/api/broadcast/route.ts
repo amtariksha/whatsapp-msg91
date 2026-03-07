@@ -5,11 +5,14 @@ import { getAppSetting } from "@/lib/settings";
 
 const MSG91_API_BASE_URL = "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
 
+// Recipient can be a plain phone string OR an object with per-recipient variables
+type RecipientEntry = string | { phone: string; variables?: Record<string, string> };
+
 export async function POST(request: NextRequest) {
     try {
         const { orgId } = getRequestContext(request.headers);
         const body = await request.json();
-        const { templateId, variables, recipients, integratedNumber } = body;
+        const { templateId, templateLanguage, variables, recipients, integratedNumber } = body;
 
         if (!templateId || !recipients || !Array.isArray(recipients) || recipients.length === 0) {
             return NextResponse.json(
@@ -21,7 +24,6 @@ export async function POST(request: NextRequest) {
         // Check app_settings first, then organizations table, then env var
         let MSG91_AUTH_KEY = await getAppSetting("msg91_auth_key", "", orgId);
         if (!MSG91_AUTH_KEY) {
-            // Fallback: check organizations table for org-specific auth key
             const { data: orgRow } = await supabaseAdmin
                 .from("organizations")
                 .select("msg91_auth_key")
@@ -37,16 +39,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Format the bulk payload for MSG91
-        // MSG91 bulk template expects an array of messages
-        const messages = recipients.map((phone: string) => {
-            // Prepare the body parameters for each template
-            // By default, assuming all recipients get the same variables for this simple broadcast
-            // In a real scenario, CSV parsing might map specific variables per phone
-            const bodyValues = Object.keys(variables || {}).map(key => variables[key]);
+        // Build per-recipient messages for MSG91 bulk API
+        const messages = (recipients as RecipientEntry[]).map((entry) => {
+            const phone = typeof entry === "string" ? entry : entry.phone;
+            // Per-recipient variables override the global static variables
+            const recipientVars = typeof entry === "object" && entry.variables
+                ? entry.variables
+                : variables || {};
+
+            const bodyValues = Object.keys(recipientVars).sort().map(key => recipientVars[key]);
 
             const components: any[] = [];
-
             if (bodyValues.length > 0) {
                 components.push({
                     type: "body",
@@ -65,15 +68,18 @@ export async function POST(request: NextRequest) {
             template: {
                 name: templateId,
                 language: {
-                    // Assuming english, but ideally this comes from the template object itself
                     policy: "deterministic",
-                    code: "en"
+                    code: templateLanguage || "en"
                 }
             },
             messages: messages
         };
 
-        console.log("[Broadcast API] Sending MSG91 Bulk Payload:", JSON.stringify(payload, null, 2));
+        console.log(`[Broadcast API] Sending to ${messages.length} recipients via MSG91`);
+        console.log("[Broadcast API] Payload sample (first 2):", JSON.stringify({
+            ...payload,
+            messages: messages.slice(0, 2)
+        }, null, 2));
 
         const response = await fetch(MSG91_API_BASE_URL, {
             method: "POST",
@@ -89,16 +95,13 @@ export async function POST(request: NextRequest) {
         if (!response.ok || data.hasError) {
             console.error("[Broadcast API] MSG91 Error:", data);
             return NextResponse.json(
-                { error: data.message || "Failed to send bulk broadcast via MSG91" },
+                { error: data.message || data.errors || "Failed to send bulk broadcast via MSG91" },
                 { status: 400 }
             );
         }
 
-        // Broadcasts don't necessarily create conversations immediately unless they reply, 
-        // but we could log the broadcast campaign into Supabase here for analytics.
-        // For now, returning success.
-
-        return NextResponse.json({ success: true, data });
+        console.log(`[Broadcast API] Success. Sent to ${messages.length} recipients.`);
+        return NextResponse.json({ success: true, data, count: messages.length });
 
     } catch (error: any) {
         console.error("[Broadcast API] Internal error:", error);
