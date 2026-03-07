@@ -1600,11 +1600,6 @@ function NumbersTab() {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {typeof num.id === "string" && num.id.startsWith("env-") && (
-                                        <span className="text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
-                                            ENV
-                                        </span>
-                                    )}
                                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${num.provider === 'meta' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
                                         {num.provider || 'MSG91'}
                                     </span>
@@ -1612,9 +1607,6 @@ function NumbersTab() {
                             </div>
 
                             <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end gap-2">
-                                {typeof num.id === "string" && num.id.startsWith("env-") ? (
-                                    <span className="text-[10px] text-slate-400 italic">Read-only (from env var)</span>
-                                ) : (
                                     <>
                                         <button
                                             onClick={() => handleEdit(num)}
@@ -1631,7 +1623,6 @@ function NumbersTab() {
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </>
-                                )}
                             </div>
                         </div>
                     ))
