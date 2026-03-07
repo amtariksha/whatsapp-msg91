@@ -39,6 +39,31 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Resolve integrated number — fall back to org's first active number if not provided
+        let sendFromNumber = integratedNumber;
+        if (!sendFromNumber || sendFromNumber === "default") {
+            const { data: fallbackNum } = await supabaseAdmin
+                .from("integrated_numbers")
+                .select("number")
+                .eq("org_id", orgId)
+                .eq("active", true)
+                .order("created_at", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+
+            if (fallbackNum) {
+                sendFromNumber = fallbackNum.number;
+                console.log(`[Broadcast API] Resolved sending number to: ${sendFromNumber}`);
+            }
+        }
+
+        if (!sendFromNumber) {
+            return NextResponse.json(
+                { error: "No integrated number configured. Add one in Settings → WhatsApp Numbers." },
+                { status: 400 }
+            );
+        }
+
         // Build per-recipient messages for MSG91 bulk API
         const messages = (recipients as RecipientEntry[]).map((entry) => {
             const phone = typeof entry === "string" ? entry : entry.phone;
@@ -64,7 +89,7 @@ export async function POST(request: NextRequest) {
         });
 
         const payload = {
-            integrated_number: integratedNumber,
+            integrated_number: sendFromNumber,
             template: {
                 name: templateId,
                 language: {
