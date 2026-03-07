@@ -505,6 +505,15 @@ export function useCTWALogs(params?: {
     });
 }
 
+export function useCTWALogForConversation(conversationId: string | null, source?: string) {
+    return useQuery({
+        queryKey: ["ctwa-log", conversationId],
+        queryFn: () => api.getCTWALogForConversation(conversationId!),
+        enabled: !!conversationId && source === "ctwa",
+        staleTime: 60 * 1000,
+    });
+}
+
 // ─── WA Native Payment ────────────────────────────────────
 export function useWaPayment() {
     const queryClient = useQueryClient();

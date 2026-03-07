@@ -510,6 +510,7 @@ export async function getCTWALogs(params?: {
     from?: string;
     to?: string;
     campaign?: string;
+    conversationId?: string;
     page?: number;
     limit?: number;
 }): Promise<{ logs: CTWALog[]; total: number; page: number; limit: number }> {
@@ -517,9 +518,15 @@ export async function getCTWALogs(params?: {
     if (params?.from) searchParams.set("from", params.from);
     if (params?.to) searchParams.set("to", params.to);
     if (params?.campaign) searchParams.set("campaign", params.campaign);
+    if (params?.conversationId) searchParams.set("conversationId", params.conversationId);
     searchParams.set("page", String(params?.page || 1));
     searchParams.set("limit", String(params?.limit || 20));
     const res = await fetch(`${BASE_URL}/api/ctwa/logs?${searchParams.toString()}`);
     if (!res.ok) throw new Error("Failed to fetch CTWA logs");
     return res.json();
+}
+
+export async function getCTWALogForConversation(conversationId: string): Promise<CTWALog | null> {
+    const data = await getCTWALogs({ conversationId, limit: 1 });
+    return data.logs[0] || null;
 }
