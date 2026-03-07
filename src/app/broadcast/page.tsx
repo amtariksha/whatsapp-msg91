@@ -197,7 +197,7 @@ export default function BroadcastPage() {
                     templateId: selectedTemplate.name,
                     templateLanguage: selectedTemplate.language,
                     recipients,
-                    integratedNumber: selectedNumber || activeNumber?.number,
+                    integratedNumber: selectedNumber || activeNumber?.number || numbers[0]?.number,
                 }),
             });
 
@@ -540,7 +540,11 @@ export default function BroadcastPage() {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Send className="w-3.5 h-3.5" />
-                                            <span>From: <strong>+{selectedNumber || activeNumber?.number || "Not selected"}</strong></span>
+                                            <span>From: <strong>{
+                                                (selectedNumber || activeNumber?.number || numbers[0]?.number)
+                                                    ? `+${selectedNumber || activeNumber?.number || numbers[0]?.number}`
+                                                    : "(auto — first active number)"
+                                            }</strong></span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Users className="w-3.5 h-3.5" />

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 import { getRequestContext } from "@/lib/request";
 import { getAppSetting } from "@/lib/settings";
 
 // ─── GET /api/balance ─────────────────────────────────────
 // Check MSG91 WhatsApp prepaid balance
+// Docs: https://docs.msg91.com/whatsapp/check-whatsapp-prepaid-balance
 export async function GET(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
     const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
@@ -14,16 +16,38 @@ export async function GET(request: NextRequest) {
         );
     }
 
+    // Get the org's integrated number — needed for balance check
+    const { data: numRow } = await supabaseAdmin
+        .from("integrated_numbers")
+        .select("number")
+        .eq("org_id", orgId)
+        .eq("active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+    const integratedNumber = numRow?.number || "";
+    if (!integratedNumber) {
+        return NextResponse.json(
+            { error: "No integrated WhatsApp number configured." },
+            { status: 400 }
+        );
+    }
+
     try {
+        // MSG91 prepaid balance endpoint
         const response = await fetch(
-            "https://api.msg91.com/api/v5/whatsapp/checkBalance",
+            "https://control.msg91.com/api/v5/subscriptions/fetchPrepaidBalance",
             {
                 method: "POST",
                 headers: {
-                    Authkey: authKey,
+                    authkey: authKey,
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({}),
+                body: JSON.stringify({
+                    integrated_number: integratedNumber,
+                    service: "whatsapp",
+                }),
             }
         );
 
@@ -47,9 +71,19 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        if (data?.hasError || data?.status === "error") {
+            console.error("[Balance] MSG91 API error:", data);
+            return NextResponse.json(
+                { error: data.errors || data.message || "MSG91 balance check failed", raw: data },
+                { status: 502 }
+            );
+        }
+
         // Extract balance from various possible response shapes
         const balance =
+            data?.prepaid_balance ??
             data?.balance ??
+            data?.data?.prepaid_balance ??
             data?.data?.balance ??
             data?.wallet_balance ??
             data?.data?.wallet_balance ??
