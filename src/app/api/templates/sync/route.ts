@@ -6,6 +6,10 @@ import { getAppSetting } from "@/lib/settings";
 // ─── POST /api/templates/sync ───────────────────────────────
 // Sync templates with MSG91 / Meta — fetches remote templates and
 // updates local template statuses (pending → approved/rejected).
+//
+// MSG91 returns a nested structure:
+//   { name, category, status: "", languages: [{ id, status: "APPROVED", language, code: [...] }] }
+// The real status is in languages[0].status, NOT the top-level status.
 export async function POST(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
 
@@ -68,38 +72,41 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await response.json();
-        const templates = Array.isArray(data) ? data : data?.data || data?.templates || [];
+        const rawTemplates = Array.isArray(data) ? data : data?.data || data?.templates || [];
 
-        // Log raw first template to see all available fields from MSG91
-        if (templates.length > 0) {
-            console.log(`[Template Sync] Raw MSG91 template sample (first):`, JSON.stringify(templates[0], null, 2));
+        if (rawTemplates.length > 0) {
+            console.log(`[Template Sync] Raw MSG91 template sample (first):`, JSON.stringify(rawTemplates[0], null, 2));
         }
 
-        const remoteTemplates = templates.map((t: Record<string, unknown>) => {
-            // MSG91 may return status under different field names
-            const rawStatus = (
-                t.status || t.approval_status || t.template_status ||
-                t.quality_rating || t.state || ""
-            ) as string;
+        // Flatten MSG91's nested structure: real status is in languages[0].status
+        const remoteTemplates: { id: string; name: string; status: string; category: string; language: string }[] = [];
 
-            // MSG91 may return id under different field names
-            const rawId = (
-                t.id || t.template_id || t._id || t.templateId || ""
-            ) as string;
+        for (const raw of rawTemplates) {
+            const languages = raw.languages as any[] | undefined;
 
-            // MSG91 may return name under different field names
-            const rawName = (
-                t.name || t.template_name || t.templateName || ""
-            ) as string;
-
-            return {
-                id: rawId,
-                name: rawName,
-                status: rawStatus.toLowerCase(),
-                category: t.category || t.template_category || "",
-                language: t.language || t.lang || "en",
-            };
-        });
+            if (Array.isArray(languages) && languages.length > 0) {
+                for (const lang of languages) {
+                    const langStatus = (lang.status || lang.approval_status || "") as string;
+                    remoteTemplates.push({
+                        id: lang.id || raw.id || raw.template_id || "",
+                        name: raw.name || lang.name || "",
+                        status: langStatus.toLowerCase(),
+                        category: ((raw.category as string) || "").toUpperCase(),
+                        language: lang.language || "en",
+                    });
+                }
+            } else {
+                // Fallback: flat structure
+                const rawStatus = (raw.status || raw.approval_status || raw.template_status || "") as string;
+                remoteTemplates.push({
+                    id: raw.id || raw.template_id || "",
+                    name: raw.name || raw.template_name || "",
+                    status: rawStatus.toLowerCase(),
+                    category: ((raw.category as string) || "").toUpperCase(),
+                    language: raw.language || "en",
+                });
+            }
+        }
 
         console.log(`[Template Sync] Fetched ${remoteTemplates.length} remote templates from MSG91`);
         for (const rt of remoteTemplates) {
@@ -146,7 +153,6 @@ export async function POST(request: NextRequest) {
                 const updateData: Record<string, unknown> = {
                     updated_at: new Date().toISOString(),
                 };
-                // Always link msg91_template_id if we have one
                 if (remote.id) updateData.msg91_template_id = remote.id;
                 if (statusChanged) updateData.status = remoteStatus;
                 if (categoryChanged) updateData.category = remoteCategory;
