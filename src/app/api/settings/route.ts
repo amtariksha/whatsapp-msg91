@@ -9,6 +9,7 @@ const GLOBAL_ONLY_KEYS = new Set([
     "facebook_app_secret",
     "facebook_oauth_redirect_uri",
     "meta_api_version",
+    "meta_webhook_verify_token",
 ]);
 
 // ─── GET /api/settings ─────────────────────────────────────

@@ -609,6 +609,8 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
     const [facebookAppSecret, setFacebookAppSecret] = useState("");
     const [facebookOauthRedirectUri, setFacebookOauthRedirectUri] = useState("");
     const [metaApiVersion, setMetaApiVersion] = useState("v21.0");
+    const [webhookVerifyToken, setWebhookVerifyToken] = useState("");
+    const [webhookCopied, setWebhookCopied] = useState(false);
     const [saved, setSaved] = useState(false);
     const [settingsGuideKey, setSettingsGuideKey] = useState<GuideKey | null>(null);
 
@@ -632,6 +634,7 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
             setFacebookAppSecret(settings.facebook_app_secret || "");
             setFacebookOauthRedirectUri(settings.facebook_oauth_redirect_uri || "");
             setMetaApiVersion(settings.meta_api_version || "v21.0");
+            setWebhookVerifyToken(settings.meta_webhook_verify_token || "");
         }
     }, [settings]);
 
@@ -656,6 +659,7 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
             orgSettings.facebook_app_secret = facebookAppSecret;
             orgSettings.facebook_oauth_redirect_uri = facebookOauthRedirectUri;
             orgSettings.meta_api_version = metaApiVersion || "v21.0";
+            orgSettings.meta_webhook_verify_token = webhookVerifyToken;
         }
 
         updateSettingsMutation(
@@ -922,6 +926,73 @@ function GeneralSettingsTab({ isSuperAdmin, orgs }: { isSuperAdmin: boolean; org
                             />
                             <p className="text-[11px] text-slate-400 mt-1.5">
                                 The Graph API version to use for Meta API calls (e.g. v21.0). Keep this updated to the latest stable version.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                )}
+
+                {/* Webhook Configuration — Global, super_admin only */}
+                {isSuperAdmin && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+                        Meta Webhook Configuration <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded ml-2 font-bold uppercase tracking-wider">Global</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-4">
+                        Configure these values in Meta Developer Console &rarr; WhatsApp &rarr; Configuration to receive messages directly from the WhatsApp Business API.
+                    </p>
+                    <div className="space-y-5">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Callback URL
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/meta` : "/api/webhooks/meta"}
+                                    className="flex-1 max-w-md px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono text-slate-600 cursor-default"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const url = `${window.location.origin}/api/webhooks/meta`;
+                                        navigator.clipboard.writeText(url);
+                                        setWebhookCopied(true);
+                                        setTimeout(() => setWebhookCopied(false), 2000);
+                                    }}
+                                    className="px-3 py-2 text-xs font-medium rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                                >
+                                    {webhookCopied ? "Copied!" : "Copy"}
+                                </button>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                Set this as the Callback URL in Meta Developer Console &rarr; WhatsApp &rarr; Configuration.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                Verify Token
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={webhookVerifyToken}
+                                    onChange={(e) => setWebhookVerifyToken(e.target.value)}
+                                    placeholder="Enter or generate a verify token"
+                                    className="flex-1 max-w-md px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setWebhookVerifyToken(crypto.randomUUID())}
+                                    className="px-3 py-2 text-xs font-medium rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                                >
+                                    Generate
+                                </button>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                A secret string used to verify the webhook. Enter the same value in Meta Developer Console when configuring the webhook.
+                                Click &ldquo;Generate&rdquo; to create a random token, then save settings and paste it in Meta.
                             </p>
                         </div>
                     </div>

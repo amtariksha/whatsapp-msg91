@@ -13,10 +13,21 @@ export async function GET(request: NextRequest) {
     const token = searchParams.get("hub.verify_token");
     const challenge = searchParams.get("hub.challenge");
 
-    // The token you set in your Meta App Settings
-    const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+    // Check DB first for verify token, fall back to env var
+    let verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+    try {
+        const { data: row } = await supabaseAdmin
+            .from("app_settings")
+            .select("value")
+            .eq("key", "meta_webhook_verify_token")
+            .is("org_id", null)
+            .maybeSingle();
+        if (row?.value) verifyToken = row.value;
+    } catch {
+        // Fall back to env var on DB error
+    }
 
-    if (mode === "subscribe" && token === verifyToken) {
+    if (mode === "subscribe" && token && token === verifyToken) {
         console.log("Meta Webhook Verified!");
         return new NextResponse(challenge, { status: 200 });
     } else {
