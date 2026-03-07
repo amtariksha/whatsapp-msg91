@@ -321,6 +321,25 @@ function MessageBubble({ message }: { message: Message }) {
     );
 }
 
+function formatDateSeparator(date: Date): string {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (msgDay.getTime() === today.getTime()) return "Today";
+    if (msgDay.getTime() === yesterday.getTime()) return "Yesterday";
+
+    // Same year → "5 March", different year → "5 March 2025"
+    const options: Intl.DateTimeFormatOptions =
+        date.getFullYear() === now.getFullYear()
+            ? { day: "numeric", month: "long" }
+            : { day: "numeric", month: "long", year: "numeric" };
+
+    return date.toLocaleDateString("en-IN", options);
+}
+
 export function ChatWindow({ className }: { className?: string }) {
     const { activeConversationId, setActiveConversation } = useAppStore();
     const toggleContactPanel = useAppStore((s) => s.toggleContactPanel);
@@ -611,9 +630,26 @@ export function ChatWindow({ className }: { className?: string }) {
             <div className="flex-1 overflow-y-auto px-5 py-4" ref={scrollRef}>
                 {ctwaLog && <CTWAReferralBanner log={ctwaLog} />}
                 <div className="space-y-1">
-                    {conversation.messages.map((msg) => (
-                        <MessageBubble key={msg.id} message={msg} />
-                    ))}
+                    {conversation.messages.map((msg, index) => {
+                        // WhatsApp-style date separator
+                        const msgDate = new Date(msg.timestamp);
+                        const prevMsg = index > 0 ? conversation.messages[index - 1] : null;
+                        const prevDate = prevMsg ? new Date(prevMsg.timestamp) : null;
+                        const showDateSep = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+
+                        return (
+                            <div key={msg.id}>
+                                {showDateSep && (
+                                    <div className="flex items-center justify-center my-3">
+                                        <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-medium text-slate-500 shadow-sm">
+                                            {formatDateSeparator(msgDate)}
+                                        </span>
+                                    </div>
+                                )}
+                                <MessageBubble message={msg} />
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 

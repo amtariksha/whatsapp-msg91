@@ -3,12 +3,12 @@ import { getRequestContext } from "@/lib/request";
 import { getAppSetting } from "@/lib/settings";
 
 const MSG91_TEMPLATE_API =
-    "https://control.msg91.com/api/v5/whatsapp/whatsapp-get-template";
+    "https://control.msg91.com/api/v5/whatsapp/getTemplates";
 
 /**
  * GET /api/templates
  * Proxy to MSG91 template listing API.
- * Returns the list of WhatsApp templates.
+ * Returns the list of WhatsApp templates (approved ones for broadcast).
  */
 export async function GET(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
         if (!authKey) {
             return NextResponse.json(
-                { error: "MSG91_AUTH_KEY not configured" },
+                { error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." },
                 { status: 500 }
             );
         }
@@ -26,78 +26,26 @@ export async function GET(request: NextRequest) {
             headers: {
                 authkey: authKey,
             },
-            next: { revalidate: 300 }, // Cache for 5 minutes
         });
 
         const data = await response.json();
 
         if (!response.ok) {
-            // Return mock templates on error for development
-            return NextResponse.json(getMockTemplates());
+            console.error("[GET Templates] MSG91 error:", response.status, JSON.stringify(data));
+            return NextResponse.json(
+                { error: `Failed to fetch templates from MSG91 (${response.status})` },
+                { status: 502 }
+            );
         }
 
-        // If MSG91 returns an array, return it directly; otherwise wrap
+        // If MSG91 returns an array, return it directly; otherwise unwrap
         const templates = Array.isArray(data) ? data : data.data || data.templates || [];
         return NextResponse.json(templates);
-    } catch {
-        // Return mock templates for development/testing
-        return NextResponse.json(getMockTemplates());
+    } catch (err) {
+        console.error("[GET Templates] Error:", err);
+        return NextResponse.json(
+            { error: "Failed to fetch templates" },
+            { status: 500 }
+        );
     }
-}
-
-function getMockTemplates() {
-    return [
-        {
-            id: "tpl-1",
-            name: "welcome_message",
-            status: "approved",
-            language: "en",
-            category: "MARKETING",
-            components: [
-                {
-                    type: "BODY",
-                    text: "Hello {{1}}, welcome to our store! Your order {{2}} has been confirmed.",
-                },
-            ],
-        },
-        {
-            id: "tpl-2",
-            name: "order_update",
-            status: "approved",
-            language: "en",
-            category: "UTILITY",
-            components: [
-                {
-                    type: "BODY",
-                    text: "Hi {{1}}, your order #{{2}} has been {{3}}. Track it here: {{4}}",
-                },
-            ],
-        },
-        {
-            id: "tpl-3",
-            name: "payment_reminder",
-            status: "approved",
-            language: "en",
-            category: "UTILITY",
-            components: [
-                {
-                    type: "BODY",
-                    text: "Dear {{1}}, your payment of ₹{{2}} is pending. Please pay before {{3}}.",
-                },
-            ],
-        },
-        {
-            id: "tpl-4",
-            name: "promotional_draft",
-            status: "pending",
-            language: "en",
-            category: "MARKETING",
-            components: [
-                {
-                    type: "BODY",
-                    text: "Hey {{1}}, check out our latest deals!",
-                },
-            ],
-        },
-    ];
 }

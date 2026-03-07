@@ -20,11 +20,11 @@ export async function POST(request: NextRequest) {
     try {
         // Fetch numbers from MSG91
         const response = await fetch(
-            "https://api.msg91.com/api/v5/whatsapp/getNumber",
+            "https://control.msg91.com/api/v5/whatsapp/getNumber",
             {
                 method: "GET",
                 headers: {
-                    Authkey: authKey,
+                    authkey: authKey,
                     "Content-Type": "application/json",
                 },
             }

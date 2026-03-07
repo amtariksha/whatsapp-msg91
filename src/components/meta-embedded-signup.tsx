@@ -157,7 +157,7 @@ export function MetaEmbeddedSignup({ onSuccess, configId }: MetaEmbeddedSignupPr
         <div className="space-y-4">
             <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Meta Configuration ID
+                    Meta Embedded Signup Configuration ID
                 </label>
                 <input
                     type="text"
@@ -166,9 +166,15 @@ export function MetaEmbeddedSignup({ onSuccess, configId }: MetaEmbeddedSignupPr
                     placeholder="e.g. 123456789012345"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
-                    From your Meta Business account → WhatsApp → Embedded Signup configuration
-                </p>
+                <div className="mt-2 p-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+                    <p className="text-[11px] font-semibold text-blue-800 mb-1">How to get this ID:</p>
+                    <ol className="text-[11px] text-blue-700 space-y-0.5 list-decimal list-inside">
+                        <li>Go to <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="underline font-medium">developers.facebook.com/apps</a></li>
+                        <li>Select your app → <strong>WhatsApp</strong> → <strong>Quickstart</strong> (or <strong>Getting Started</strong>)</li>
+                        <li>Under <strong>Embedded Signup</strong>, create or select a configuration</li>
+                        <li>Copy the <strong>Configuration ID</strong> (a numeric string like 123456789012345)</li>
+                    </ol>
+                </div>
             </div>
 
             {error && (
