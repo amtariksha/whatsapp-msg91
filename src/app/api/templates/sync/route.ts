@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        console.log(`[Template Sync] Fetching from MSG91 for number: ${integratedNumber}, orgId: ${orgId}`);
+
         // Fetch templates from MSG91
         const url = `https://control.msg91.com/api/v5/whatsapp/get-template-client/${integratedNumber}`;
         const response = await fetch(url, {
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
             const errText = await response.text();
             console.error("[Template Sync] MSG91 error:", response.status, errText);
             return NextResponse.json(
-                { error: `Failed to fetch templates from MSG91 (${response.status})` },
+                { error: `Failed to fetch templates from MSG91 (${response.status}): ${errText}` },
                 { status: 502 }
             );
         }
@@ -76,28 +78,40 @@ export async function POST(request: NextRequest) {
             language: t.language || "en",
         }));
 
+        console.log(`[Template Sync] Fetched ${remoteTemplates.length} remote templates from MSG91`);
+
         // Update local templates_local statuses AND categories from MSG91 remote
-        // Match by name (or msg91_template_id) and update status + category
+        // Match by msg91_template_id first, then by name (case-insensitive)
         const { data: localTemplates } = await supabaseAdmin
             .from("templates_local")
             .select("id, name, status, category, msg91_template_id")
             .eq("org_id", orgId);
 
+        console.log(`[Template Sync] Found ${(localTemplates || []).length} local templates for org ${orgId}`);
+
         let updated = 0;
+        const unmatched: string[] = [];
+
         for (const local of localTemplates || []) {
-            // Match by msg91_template_id first, then by name
+            // Match by msg91_template_id first, then by name (case-insensitive)
             const remote = remoteTemplates.find(
                 (r: { id: string; name: string }) =>
                     (local.msg91_template_id && r.id === local.msg91_template_id) ||
-                    r.name === local.name
+                    r.name === local.name ||
+                    r.name?.toLowerCase() === local.name?.toLowerCase()
             );
 
-            if (!remote) continue;
+            if (!remote) {
+                unmatched.push(local.name);
+                continue;
+            }
 
             // Check if status or category changed
             const remoteCategory = ((remote.category as string) || "").toUpperCase();
             const localCategory = ((local.category as string) || "").toUpperCase();
-            const statusChanged = remote.status !== local.status;
+            const remoteStatus = remote.status?.toLowerCase() || "";
+            const localStatus = local.status?.toLowerCase() || "";
+            const statusChanged = remoteStatus !== localStatus;
             const categoryChanged = remoteCategory && remoteCategory !== localCategory;
 
             if (statusChanged || categoryChanged) {
@@ -105,7 +119,7 @@ export async function POST(request: NextRequest) {
                     msg91_template_id: remote.id || local.msg91_template_id,
                     updated_at: new Date().toISOString(),
                 };
-                if (statusChanged) updateData.status = remote.status;
+                if (statusChanged) updateData.status = remoteStatus;
                 if (categoryChanged) updateData.category = remoteCategory;
 
                 const { error: updateErr } = await supabaseAdmin
@@ -115,13 +129,23 @@ export async function POST(request: NextRequest) {
 
                 if (!updateErr) {
                     updated++;
-                    if (statusChanged) console.log(`[Template Sync] ${local.name}: status ${local.status} → ${remote.status}`);
-                    if (categoryChanged) console.log(`[Template Sync] ${local.name}: category ${localCategory} → ${remoteCategory}`);
+                    if (statusChanged) console.log(`[Template Sync] ✓ ${local.name}: status "${localStatus}" → "${remoteStatus}"`);
+                    if (categoryChanged) console.log(`[Template Sync] ✓ ${local.name}: category "${localCategory}" → "${remoteCategory}"`);
                 } else {
                     console.warn("[Template Sync] Update error for", local.name, updateErr.message);
                 }
+            } else {
+                console.log(`[Template Sync] ─ ${local.name}: already up to date (status: ${localStatus}, category: ${localCategory})`);
             }
         }
+
+        if (unmatched.length > 0) {
+            console.log(`[Template Sync] ✗ ${unmatched.length} local templates had no remote match: ${unmatched.join(", ")}`);
+            // Log remote names for debugging
+            console.log(`[Template Sync] Remote template names: ${remoteTemplates.map((r: { name: string }) => r.name).join(", ")}`);
+        }
+
+        console.log(`[Template Sync] Done. Updated ${updated} of ${(localTemplates || []).length} local templates.`);
 
         return NextResponse.json({
             synced: true,

@@ -171,6 +171,8 @@ export default function TemplatesPage() {
             if (res.ok) {
                 const data = await res.json();
                 setSyncedTemplates(data.templates || []);
+                // Refresh local templates so updated statuses/categories are reflected
+                await fetchLocalTemplates(isSuperAdmin ? selectedOrgId : undefined);
                 setActiveTab("synced");
             }
         } catch (e) {
