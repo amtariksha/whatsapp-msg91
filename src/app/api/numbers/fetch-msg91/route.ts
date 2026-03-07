@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getRequestContext } from "@/lib/request";
+import { getAppSetting } from "@/lib/settings";
 
 // ─── POST /api/numbers/fetch-msg91 ────────────────────────
 // Auto-detect WhatsApp numbers from MSG91 account and import them
@@ -8,10 +9,10 @@ export async function POST(request: NextRequest) {
     const { orgId, isSuperAdmin } = getRequestContext(request.headers);
     // For auto-detect, super_admin imports to their own org (can reassign later)
     const targetOrgId = orgId;
-    const authKey = process.env.MSG91_AUTH_KEY;
+    const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
     if (!authKey) {
         return NextResponse.json(
-            { error: "MSG91_AUTH_KEY not configured" },
+            { error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." },
             { status: 500 }
         );
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestContext } from "@/lib/request";
+import { getAppSetting } from "@/lib/settings";
 
 const MSG91_TEMPLATE_API =
     "https://control.msg91.com/api/v5/whatsapp/whatsapp-get-template";
@@ -12,7 +13,7 @@ const MSG91_TEMPLATE_API =
 export async function GET(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
     try {
-        const authKey = process.env.MSG91_AUTH_KEY;
+        const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
 
         if (!authKey) {
             return NextResponse.json(

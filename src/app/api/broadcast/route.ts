@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getRequestContext } from "@/lib/request";
+import { getAppSetting } from "@/lib/settings";
 
-const MSG91_AUTH_KEY = process.env.MSG91_AUTH_KEY || "";
 const MSG91_API_BASE_URL = "https://control.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
 
 export async function POST(request: NextRequest) {
@@ -18,10 +18,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const MSG91_AUTH_KEY = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
         if (!MSG91_AUTH_KEY) {
-            console.error("[Broadcast API] MSG91_AUTH_KEY is missing");
+            console.error("[Broadcast API] MSG91 Auth Key is missing");
             return NextResponse.json(
-                { error: "Server misconfiguration. Missing API Key." },
+                { error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." },
                 { status: 500 }
             );
         }
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
         });
 
         const payload = {
-            integrated_number: integratedNumber || process.env.MSG91_INTEGRATED_NUMBER,
+            integrated_number: integratedNumber,
             template: {
                 name: templateId,
                 language: {

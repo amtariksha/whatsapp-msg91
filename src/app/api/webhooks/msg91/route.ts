@@ -144,19 +144,6 @@ export async function POST(request: NextRequest) {
                 resolvedOrgId = matchedNumber.org_id || "";
             }
 
-            // Check 2: Fallback to env var (numbers may not be in DB)
-            if (!isSenderBusinessNumber) {
-                const envSingleNumber = (process.env.MSG91_INTEGRATED_NUMBER || "").replace(/^\+/, "");
-                const envMultipleNumbers = (process.env.MSG91_INTEGRATED_NUMBERS || "")
-                    .split(",")
-                    .map(entry => entry.split(":")[0].trim().replace(/^\+/, ""))
-                    .filter(Boolean);
-                const allEnvNumbers = [envSingleNumber, ...envMultipleNumbers].filter(Boolean);
-                if (allEnvNumbers.includes(normalizedPhone)) {
-                    isSenderBusinessNumber = true;
-                }
-            }
-
             if (isSenderBusinessNumber) {
                 console.log(`[MSG91 Webhook] Sender ${normalizedPhone} is a known business number`);
             }
