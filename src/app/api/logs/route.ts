@@ -23,24 +23,30 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "25");
 
     try {
-        // Build filter body for MSG91 logs API
-        const filterBody: Record<string, unknown> = {};
-        if (from) filterBody.from_date = from;
-        if (to) filterBody.to_date = to;
-        if (phone) filterBody.phone = phone.replace(/^\+/, "");
-        if (status && status !== "all") filterBody.status = status;
-        filterBody.page = page;
-        filterBody.limit = limit;
+        // Build query params for MSG91 report logs API
+        // MSG91 requires startDate/endDate in YYYY-MM-DD format, max 3 day range
+        const params = new URLSearchParams();
+
+        // Default to last 3 days if no dates provided
+        const now = new Date();
+        const threeDaysAgo = new Date(now);
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+        const startDate = from || threeDaysAgo.toISOString().split("T")[0];
+        const endDate = to || now.toISOString().split("T")[0];
+
+        params.set("startDate", startDate);
+        params.set("endDate", endDate);
+        if (limit) params.set("limit", String(limit));
 
         const response = await fetch(
-            "https://control.msg91.com/api/v5/whatsapp/logs",
+            `https://control.msg91.com/api/v5/report/logs/wa?${params.toString()}`,
             {
                 method: "POST",
                 headers: {
                     authkey: authKey,
-                    "Content-Type": "application/json",
+                    accept: "application/json",
                 },
-                body: JSON.stringify(filterBody),
             }
         );
 
@@ -64,7 +70,7 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Normalize the response — MSG91 may return different structures
+        // Normalize the response — MSG91 report/logs/wa returns { data: [...], metadata: {...} }
         let rawLogs: any[] = [];
         let total = 0;
 
@@ -73,30 +79,42 @@ export async function GET(request: NextRequest) {
             total = data.length;
         } else if (Array.isArray(data?.data)) {
             rawLogs = data.data;
-            total = data.total || data.count || data.data.length;
-        } else if (Array.isArray(data?.logs)) {
-            rawLogs = data.logs;
-            total = data.total || data.count || data.logs.length;
+            total = data.metadata?.totalCount || data.total || data.data.length;
         } else if (data?.data && typeof data.data === "object" && !Array.isArray(data.data)) {
-            // Some APIs return { data: { logs: [...], total: N } }
             if (Array.isArray(data.data.logs)) {
                 rawLogs = data.data.logs;
-                total = data.data.total || data.data.count || rawLogs.length;
+                total = data.data.total || rawLogs.length;
             }
         }
 
-        // Map to our log format
-        const logs = rawLogs.map((log: any) => ({
-            id: log.id || log._id || log.request_id || String(Math.random()),
-            phone: log.phone || log.recipient || log.to || "",
-            direction: log.direction || log.type || (log.sender ? "outbound" : "outbound"),
-            status: log.status || log.delivery_status || "unknown",
-            contentType: log.content_type || log.msg_type || log.type || "text",
-            templateName: log.template_name || log.templateName || undefined,
-            sentAt: log.sent_at || log.created_at || log.timestamp || log.createdAt || "",
-            deliveredAt: log.delivered_at || log.deliveredAt || undefined,
-            readAt: log.read_at || log.readAt || undefined,
-            credits: log.credits || log.credit || log.cost || undefined,
+        // Client-side filtering by phone/status if provided
+        let filteredLogs = rawLogs;
+        if (phone) {
+            const cleanPhone = phone.replace(/^\+/, "");
+            filteredLogs = filteredLogs.filter(
+                (log: any) => (log.customerNumber || "").includes(cleanPhone)
+            );
+        }
+        if (status && status !== "all") {
+            filteredLogs = filteredLogs.filter(
+                (log: any) => (log.status || "").toLowerCase() === status.toLowerCase()
+            );
+        }
+
+        // Map MSG91 report fields to our log format
+        const logs = filteredLogs.map((log: any) => ({
+            id: log.uuid || log.requestId || log.CRQID || String(Math.random()),
+            phone: log.customerNumber || log.phone || log.recipient || "",
+            direction: log.direction || "outbound",
+            status: log.status || "unknown",
+            contentType: log.messageType || log.content_type || "text",
+            templateName: log.templateName || log.campaignName || undefined,
+            sentAt: log.sentTime || log.requestedAt || "",
+            deliveredAt: log.deliveryTime || undefined,
+            readAt: log.readTime || undefined,
+            credits: log.price || undefined,
+            failureReason: log.failureReason || undefined,
+            integratedNumber: log.integratedNumber || undefined,
         }));
 
         return NextResponse.json({

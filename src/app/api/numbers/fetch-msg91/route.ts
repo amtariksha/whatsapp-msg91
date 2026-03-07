@@ -18,14 +18,14 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        // Fetch numbers from MSG91
+        // Fetch numbers from MSG91 (whatsapp-activation endpoint)
         const response = await fetch(
-            "https://control.msg91.com/api/v5/whatsapp/getNumber",
+            "https://control.msg91.com/api/v5/whatsapp/whatsapp-activation/",
             {
                 method: "GET",
                 headers: {
                     authkey: authKey,
-                    "Content-Type": "application/json",
+                    accept: "application/json",
                 },
             }
         );
