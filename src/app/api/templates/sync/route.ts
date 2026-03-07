@@ -17,15 +17,32 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+        // Get the org's integrated number (required by MSG91 get-template-client endpoint)
+        const { data: numRow } = await supabaseAdmin
+            .from("integrated_numbers")
+            .select("number")
+            .eq("org_id", orgId)
+            .eq("active", true)
+            .limit(1)
+            .maybeSingle();
+
+        const integratedNumber = numRow?.number || "";
+
+        if (!integratedNumber) {
+            return NextResponse.json(
+                { error: "No integrated WhatsApp number configured. Add one in Settings → WhatsApp Numbers." },
+                { status: 400 }
+            );
+        }
+
         // Fetch templates from MSG91
-        const response = await fetch(
-            "https://control.msg91.com/api/v5/whatsapp/getTemplates",
-            {
-                headers: {
-                    authkey: authKey,
-                },
-            }
-        );
+        const url = `https://control.msg91.com/api/v5/whatsapp/get-template-client/${integratedNumber}`;
+        const response = await fetch(url, {
+            headers: {
+                authkey: authKey,
+                accept: "application/json",
+            },
+        });
 
         if (!response.ok) {
             const errText = await response.text();
@@ -37,7 +54,7 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await response.json();
-        const templates = data?.data || data?.templates || [];
+        const templates = Array.isArray(data) ? data : data?.data || data?.templates || [];
 
         const remoteTemplates = templates.map((t: Record<string, unknown>) => ({
             id: t.id || t.template_id,

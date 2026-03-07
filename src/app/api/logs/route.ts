@@ -33,11 +33,11 @@ export async function GET(request: NextRequest) {
         filterBody.limit = limit;
 
         const response = await fetch(
-            "https://api.msg91.com/api/v5/whatsapp/logs",
+            "https://control.msg91.com/api/v5/whatsapp/logs",
             {
                 method: "POST",
                 headers: {
-                    Authkey: authKey,
+                    authkey: authKey,
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify(filterBody),

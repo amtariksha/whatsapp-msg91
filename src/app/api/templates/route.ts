@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 import { getRequestContext } from "@/lib/request";
 import { getAppSetting } from "@/lib/settings";
 
-const MSG91_TEMPLATE_API =
-    "https://control.msg91.com/api/v5/whatsapp/getTemplates";
-
 /**
  * GET /api/templates
- * Proxy to MSG91 template listing API.
- * Returns the list of WhatsApp templates (approved ones for broadcast).
+ * Fetch WhatsApp templates from MSG91 using the documented endpoint:
+ * control.msg91.com/api/v5/whatsapp/get-template-client/:number
  */
 export async function GET(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
@@ -22,9 +20,30 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const response = await fetch(MSG91_TEMPLATE_API, {
+        // Get the org's integrated number (required by this MSG91 endpoint)
+        const { data: numRow } = await supabaseAdmin
+            .from("integrated_numbers")
+            .select("number")
+            .eq("org_id", orgId)
+            .eq("active", true)
+            .limit(1)
+            .maybeSingle();
+
+        const integratedNumber = numRow?.number || "";
+
+        if (!integratedNumber) {
+            return NextResponse.json(
+                { error: "No integrated WhatsApp number configured. Add one in Settings → WhatsApp Numbers." },
+                { status: 400 }
+            );
+        }
+
+        const url = `https://control.msg91.com/api/v5/whatsapp/get-template-client/${integratedNumber}`;
+
+        const response = await fetch(url, {
             headers: {
                 authkey: authKey,
+                accept: "application/json",
             },
         });
 
