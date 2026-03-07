@@ -103,8 +103,9 @@ export function MetaEmbeddedSignup({ onSuccess, configId }: MetaEmbeddedSignupPr
             setStatus("loading");
 
             // Launch Embedded Signup login
+            // NOTE: FB.login callback must be a regular function, not async
             window.FB.login(
-                async (response) => {
+                (response) => {
                     const code = response.authResponse?.code;
                     if (!code) {
                         setError("Facebook login was cancelled or failed");
@@ -114,27 +115,27 @@ export function MetaEmbeddedSignup({ onSuccess, configId }: MetaEmbeddedSignupPr
 
                     setStatus("processing");
 
-                    try {
-                        const onboardRes = await fetch("/api/meta/onboard", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ code, configId: inputConfigId.trim() }),
-                        });
-
-                        const result = await onboardRes.json();
-
-                        if (!onboardRes.ok) {
-                            setError(result.error || "Onboarding failed");
+                    fetch("/api/meta/onboard", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ code, configId: inputConfigId.trim() }),
+                    })
+                        .then((onboardRes) =>
+                            onboardRes.json().then((result) => ({ ok: onboardRes.ok, result }))
+                        )
+                        .then(({ ok, result }) => {
+                            if (!ok) {
+                                setError(result.error || "Onboarding failed");
+                                setStatus("error");
+                                return;
+                            }
+                            setStatus("success");
+                            onSuccess();
+                        })
+                        .catch(() => {
+                            setError("Network error during onboarding");
                             setStatus("error");
-                            return;
-                        }
-
-                        setStatus("success");
-                        onSuccess();
-                    } catch (err) {
-                        setError("Network error during onboarding");
-                        setStatus("error");
-                    }
+                        });
                 },
                 {
                     config_id: inputConfigId.trim(),
