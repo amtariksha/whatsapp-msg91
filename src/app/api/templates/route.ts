@@ -74,12 +74,24 @@ export async function GET(request: NextRequest) {
         // If MSG91 returns an array, return it directly; otherwise unwrap
         const rawTemplates = Array.isArray(data) ? data : data.data || data.templates || [];
 
-        // Normalize fields: MSG91 may return status/category in uppercase
-        const templates = rawTemplates.map((t: Record<string, unknown>) => ({
-            ...t,
-            status: ((t.status as string) || "").toLowerCase(),
-            category: ((t.category as string) || "MARKETING").toUpperCase(),
-        }));
+        // Log raw first template to understand MSG91 response structure
+        if (rawTemplates.length > 0) {
+            console.log(`[GET Templates] Raw MSG91 template sample:`, JSON.stringify(rawTemplates[0], null, 2));
+        }
+
+        // Normalize fields: MSG91 may return status/category under different field names
+        const templates = rawTemplates.map((t: Record<string, unknown>) => {
+            const rawStatus = (
+                t.status || t.approval_status || t.template_status ||
+                t.quality_rating || t.state || ""
+            ) as string;
+
+            return {
+                ...t,
+                status: rawStatus.toLowerCase() || "approved", // Default to approved if MSG91 omits status
+                category: ((t.category as string) || (t.template_category as string) || "MARKETING").toUpperCase(),
+            };
+        });
 
         return NextResponse.json(templates);
     } catch (err) {

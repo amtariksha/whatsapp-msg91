@@ -70,15 +70,41 @@ export async function POST(request: NextRequest) {
         const data = await response.json();
         const templates = Array.isArray(data) ? data : data?.data || data?.templates || [];
 
-        const remoteTemplates = templates.map((t: Record<string, unknown>) => ({
-            id: t.id || t.template_id,
-            name: t.name || t.template_name,
-            status: ((t.status as string) || "").toLowerCase(),
-            category: t.category,
-            language: t.language || "en",
-        }));
+        // Log raw first template to see all available fields from MSG91
+        if (templates.length > 0) {
+            console.log(`[Template Sync] Raw MSG91 template sample (first):`, JSON.stringify(templates[0], null, 2));
+        }
+
+        const remoteTemplates = templates.map((t: Record<string, unknown>) => {
+            // MSG91 may return status under different field names
+            const rawStatus = (
+                t.status || t.approval_status || t.template_status ||
+                t.quality_rating || t.state || ""
+            ) as string;
+
+            // MSG91 may return id under different field names
+            const rawId = (
+                t.id || t.template_id || t._id || t.templateId || ""
+            ) as string;
+
+            // MSG91 may return name under different field names
+            const rawName = (
+                t.name || t.template_name || t.templateName || ""
+            ) as string;
+
+            return {
+                id: rawId,
+                name: rawName,
+                status: rawStatus.toLowerCase(),
+                category: t.category || t.template_category || "",
+                language: t.language || t.lang || "en",
+            };
+        });
 
         console.log(`[Template Sync] Fetched ${remoteTemplates.length} remote templates from MSG91`);
+        for (const rt of remoteTemplates) {
+            console.log(`[Template Sync]   Remote: "${rt.name}" status="${rt.status}" category="${rt.category}" id="${rt.id}"`);
+        }
 
         // Update local templates_local statuses AND categories from MSG91 remote
         // Match by msg91_template_id first, then by name (case-insensitive)
@@ -95,10 +121,10 @@ export async function POST(request: NextRequest) {
         for (const local of localTemplates || []) {
             // Match by msg91_template_id first, then by name (case-insensitive)
             const remote = remoteTemplates.find(
-                (r: { id: string; name: string }) =>
-                    (local.msg91_template_id && r.id === local.msg91_template_id) ||
+                (r) =>
+                    (local.msg91_template_id && r.id && r.id === local.msg91_template_id) ||
                     r.name === local.name ||
-                    r.name?.toLowerCase() === local.name?.toLowerCase()
+                    (r.name && local.name && r.name.toLowerCase() === local.name.toLowerCase())
             );
 
             if (!remote) {
@@ -111,14 +137,17 @@ export async function POST(request: NextRequest) {
             const localCategory = ((local.category as string) || "").toUpperCase();
             const remoteStatus = remote.status?.toLowerCase() || "";
             const localStatus = local.status?.toLowerCase() || "";
-            const statusChanged = remoteStatus !== localStatus;
+
+            // Only update status if remote has a real value (don't overwrite with empty)
+            const statusChanged = remoteStatus && remoteStatus !== localStatus;
             const categoryChanged = remoteCategory && remoteCategory !== localCategory;
 
             if (statusChanged || categoryChanged) {
                 const updateData: Record<string, unknown> = {
-                    msg91_template_id: remote.id || local.msg91_template_id,
                     updated_at: new Date().toISOString(),
                 };
+                // Always link msg91_template_id if we have one
+                if (remote.id) updateData.msg91_template_id = remote.id;
                 if (statusChanged) updateData.status = remoteStatus;
                 if (categoryChanged) updateData.category = remoteCategory;
 
@@ -135,14 +164,13 @@ export async function POST(request: NextRequest) {
                     console.warn("[Template Sync] Update error for", local.name, updateErr.message);
                 }
             } else {
-                console.log(`[Template Sync] ─ ${local.name}: already up to date (status: ${localStatus}, category: ${localCategory})`);
+                console.log(`[Template Sync] ─ ${local.name}: no changes (remote_status="${remoteStatus}", local_status="${localStatus}", remote_cat="${remoteCategory}", local_cat="${localCategory}")`);
             }
         }
 
         if (unmatched.length > 0) {
             console.log(`[Template Sync] ✗ ${unmatched.length} local templates had no remote match: ${unmatched.join(", ")}`);
-            // Log remote names for debugging
-            console.log(`[Template Sync] Remote template names: ${remoteTemplates.map((r: { name: string }) => r.name).join(", ")}`);
+            console.log(`[Template Sync] Remote template names: ${remoteTemplates.map((r) => r.name).join(", ")}`);
         }
 
         console.log(`[Template Sync] Done. Updated ${updated} of ${(localTemplates || []).length} local templates.`);
