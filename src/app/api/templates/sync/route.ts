@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
         for (const local of localTemplates || []) {
             // Match by msg91_template_id first, then by name (case-insensitive)
             const remote = remoteTemplates.find(
-                (r) =>
+                (r: { id: string; name: string; status: string; category: string; language: string }) =>
                     (local.msg91_template_id && r.id && r.id === local.msg91_template_id) ||
                     r.name === local.name ||
                     (r.name && local.name && r.name.toLowerCase() === local.name.toLowerCase())
