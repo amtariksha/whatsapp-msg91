@@ -18,6 +18,7 @@ import {
     Trash2,
     Send,
     CloudUpload,
+    Building2,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -116,11 +117,16 @@ const LANGUAGE_LABELS: Record<string, string> = {
 export default function TemplatesPage() {
     const { user } = useAuth();
     const router = useRouter();
+    const isSuperAdmin = user?.role === "super_admin";
     const [activeTab, setActiveTab] = useState<"local" | "synced">("local");
     const [templates, setTemplates] = useState<LocalTemplate[]>([]);
     const [syncedTemplates, setSyncedTemplates] = useState<SyncedTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
+
+    // Org selector for super_admin
+    const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
+    const [selectedOrgId, setSelectedOrgId] = useState("");
 
     // View dialog state
     const [viewTemplate, setViewTemplate] = useState<LocalTemplate | null>(null);
@@ -131,9 +137,25 @@ export default function TemplatesPage() {
     // Submission state
     const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-    const fetchLocalTemplates = async () => {
+    // Fetch orgs for super_admin
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+        fetch("/api/organizations")
+            .then((r) => r.json())
+            .then((data) => {
+                if (Array.isArray(data)) {
+                    setOrgs(data);
+                    if (data.length > 0 && !selectedOrgId) setSelectedOrgId(data[0].id);
+                }
+            })
+            .catch(() => {});
+    }, [isSuperAdmin]);
+
+    const fetchLocalTemplates = async (orgId?: string) => {
+        setLoading(true);
         try {
-            const res = await fetch("/api/templates/local");
+            const params = orgId ? `?orgId=${orgId}` : "";
+            const res = await fetch(`/api/templates/local${params}`);
             if (res.ok) setTemplates(await res.json());
         } catch (e) {
             console.error("Failed to fetch local templates:", e);
@@ -158,9 +180,14 @@ export default function TemplatesPage() {
         }
     };
 
+    // Fetch templates on mount and when selected org changes
     useEffect(() => {
-        fetchLocalTemplates();
-    }, []);
+        if (isSuperAdmin) {
+            if (selectedOrgId) fetchLocalTemplates(selectedOrgId);
+        } else {
+            fetchLocalTemplates();
+        }
+    }, [selectedOrgId, isSuperAdmin]);
 
     const handleNewTemplate = () => {
         router.push("/templates/create");
@@ -184,7 +211,7 @@ export default function TemplatesPage() {
                 headerContent: t.headerContent || undefined,
             }),
         });
-        fetchLocalTemplates();
+        fetchLocalTemplates(isSuperAdmin ? selectedOrgId : undefined);
     };
 
     const handleDelete = async (t: LocalTemplate) => {
@@ -195,7 +222,7 @@ export default function TemplatesPage() {
             if (!confirm("Delete this template?")) return;
             await fetch(`/api/templates/local/${t.id}`, { method: "DELETE" });
         }
-        fetchLocalTemplates();
+        fetchLocalTemplates(isSuperAdmin ? selectedOrgId : undefined);
     };
 
     const handleCopyId = (id: string) => {
@@ -214,7 +241,7 @@ export default function TemplatesPage() {
                 alert(`Submission failed: ${data.error || "Unknown error"}`);
                 return;
             }
-            fetchLocalTemplates();
+            fetchLocalTemplates(isSuperAdmin ? selectedOrgId : undefined);
         } catch (e) {
             console.error("Submit failed:", e);
             alert("Failed to submit template. Please try again.");
@@ -223,7 +250,7 @@ export default function TemplatesPage() {
         }
     };
 
-    if (user?.role !== "admin") {
+    if (user?.role !== "admin" && user?.role !== "super_admin") {
         return (
             <div className="flex items-center justify-center h-full">
                 <div className="text-center">
@@ -262,6 +289,27 @@ export default function TemplatesPage() {
                     </Button>
                 </div>
             </div>
+
+            {/* Org Selector for super_admin */}
+            {isSuperAdmin && orgs.length > 0 && (
+                <div className="mb-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                    <div className="flex items-center gap-3">
+                        <Building2 className="w-5 h-5 text-slate-500" />
+                        <div className="flex-1">
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">View templates for organization</label>
+                            <select
+                                value={selectedOrgId}
+                                onChange={(e) => setSelectedOrgId(e.target.value)}
+                                className="w-full max-w-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                            >
+                                {orgs.map((org) => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Tabs */}
             <div className="flex gap-1 mb-6 bg-slate-100 rounded-lg p-1 w-fit">

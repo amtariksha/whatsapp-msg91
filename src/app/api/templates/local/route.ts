@@ -5,14 +5,21 @@ import { getRequestContext } from "@/lib/request";
 // ─── GET /api/templates/local ───────────────────────────────
 export async function GET(request: NextRequest) {
     const { orgId, isSuperAdmin } = getRequestContext(request.headers);
+    const { searchParams } = request.nextUrl;
+
+    // Super admin can filter by a specific org via ?orgId=...
+    const targetOrgId = isSuperAdmin && searchParams.get("orgId")
+        ? searchParams.get("orgId")!
+        : orgId;
 
     let query = supabaseAdmin
         .from("templates_local")
         .select("*")
         .order("created_at", { ascending: false });
 
-    if (!isSuperAdmin) {
-        query = query.eq("org_id", orgId);
+    // Always scope to an org
+    if (targetOrgId) {
+        query = query.eq("org_id", targetOrgId);
     }
 
     const { data, error } = await query;
