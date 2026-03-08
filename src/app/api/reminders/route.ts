@@ -11,8 +11,8 @@ export async function GET(request: NextRequest) {
         .select("*, conversations(contact_id, contacts(name, phone))")
         .eq("org_id", orgId)
         .eq("user_id", userId)
-        .eq("is_dismissed", false)
-        .order("remind_at", { ascending: true });
+        .neq("status", "dismissed")
+        .order("due_at", { ascending: true });
 
     if (error) {
         console.error("Fetch reminders error:", error);
@@ -26,9 +26,9 @@ export async function GET(request: NextRequest) {
             id: r.id,
             conversationId: r.conversation_id,
             userId: r.user_id,
-            remindAt: r.remind_at,
+            remindAt: r.due_at,
             note: r.note || undefined,
-            isDismissed: r.is_dismissed,
+            isDismissed: r.status === "dismissed",
             createdAt: r.created_at,
             contactName: contact?.name || "Unknown",
             contactPhone: contact?.phone || "",
@@ -48,9 +48,10 @@ export async function POST(request: NextRequest) {
         .insert({
             conversation_id: body.conversationId,
             user_id: userId,
-            remind_at: body.remindAt,
+            due_at: body.remindAt,
             note: body.note || null,
             org_id: orgId,
+            status: "active",
         })
         .select()
         .single();
@@ -64,9 +65,9 @@ export async function POST(request: NextRequest) {
         id: data.id,
         conversationId: data.conversation_id,
         userId: data.user_id,
-        remindAt: data.remind_at,
+        remindAt: data.due_at,
         note: data.note || undefined,
-        isDismissed: data.is_dismissed,
+        isDismissed: data.status === "dismissed",
         createdAt: data.created_at,
     }, { status: 201 });
 }

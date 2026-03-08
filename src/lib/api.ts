@@ -17,6 +17,8 @@ import type {
     CTWAConfig,
     CTWAAd,
     CTWALog,
+    BroadcastCampaign,
+    BroadcastsResponse,
 } from "./types";
 
 const BASE_URL = "";
@@ -71,6 +73,14 @@ export async function assignConversation(
     });
     if (!res.ok) throw new Error("Failed to assign conversation");
     return res.json();
+}
+
+export async function markConversationAsRead(id: string): Promise<void> {
+    await fetch(`${BASE_URL}/api/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unreadCount: 0 }),
+    });
 }
 
 // ─── Messages ──────────────────────────────────────────────
@@ -307,6 +317,56 @@ export async function fetchMsg91Numbers(): Promise<{
     });
     if (!res.ok) throw new Error("Failed to fetch numbers from MSG91");
     return res.json();
+}
+
+// ─── Broadcasts ───────────────────────────────────────────
+export async function getBroadcasts(params?: {
+    search?: string;
+    status?: string;
+    days?: string;
+}): Promise<BroadcastsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set("search", params.search);
+    if (params?.status && params.status !== "all") searchParams.set("status", params.status);
+    if (params?.days && params.days !== "all") searchParams.set("days", params.days);
+    const res = await fetch(`${BASE_URL}/api/broadcast?${searchParams.toString()}`);
+    if (!res.ok) throw new Error("Failed to fetch broadcasts");
+    return res.json();
+}
+
+export async function getBroadcast(id: string): Promise<BroadcastCampaign> {
+    const res = await fetch(`${BASE_URL}/api/broadcast/${id}`);
+    if (!res.ok) throw new Error("Failed to fetch broadcast");
+    return res.json();
+}
+
+export async function createBroadcast(payload: {
+    name?: string;
+    templateId: string;
+    templateLanguage?: string;
+    variables?: Record<string, string>;
+    recipients: Array<string | { phone: string; variables?: Record<string, string> }>;
+    integratedNumber?: string;
+    csvFileName?: string;
+}): Promise<BroadcastCampaign> {
+    const res = await fetch(`${BASE_URL}/api/broadcast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create broadcast");
+    }
+    return res.json();
+}
+
+export async function exportContacts(search?: string): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    const res = await fetch(`${BASE_URL}/api/contacts/export?${params.toString()}`);
+    if (!res.ok) throw new Error("Failed to export contacts");
+    return res.blob();
 }
 
 // ─── MSG91 Balance ─────────────────────────────────────────

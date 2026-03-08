@@ -96,11 +96,38 @@ export interface Template {
 }
 
 // ─── Broadcast ─────────────────────────────────────────────
+export type BroadcastStatus = "sending" | "completed" | "failed";
+
 export interface BroadcastCampaign {
+  id: string;
+  name: string;
   templateName: string;
   templateLanguage: string;
-  variables: Record<string, string>;
-  recipients: string[];
+  integratedNumber?: string;
+  recipientsCount: number;
+  sentCount: number;
+  deliveredCount: number;
+  readCount: number;
+  repliedCount: number;
+  failedCount: number;
+  status: BroadcastStatus;
+  csvFileName?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BroadcastSummary {
+  totalRecipients: number;
+  totalSent: number;
+  totalDelivered: number;
+  totalRead: number;
+  totalFailed: number;
+}
+
+export interface BroadcastsResponse {
+  campaigns: BroadcastCampaign[];
+  summary: BroadcastSummary;
 }
 
 // ─── Payment ───────────────────────────────────────────────

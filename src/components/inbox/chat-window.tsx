@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import {
     Check,
     CheckCheck,
@@ -38,6 +38,7 @@ import {
     useUsers,
     useVoiceCall,
     useCTWALogForConversation,
+    useMarkAsRead,
 } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/components/auth-provider";
@@ -143,6 +144,95 @@ function StatusIcon({ status }: { status: MessageStatus }) {
     }
 }
 
+// Parse message body: extract display text, media URL, and media type from
+// various formats (plain text, JSON with attachment_url/caption, JSON with location, etc.)
+function parseMessageBody(body: string, mediaUrl?: string, contentType?: string): {
+    displayText: string;
+    imageUrl?: string;
+    documentUrl?: string;
+} {
+    const result: { displayText: string; imageUrl?: string; documentUrl?: string } = {
+        displayText: body || "",
+    };
+
+    // If there's already a media_url from the DB, use it
+    if (mediaUrl) {
+        if (contentType === "image") {
+            result.imageUrl = mediaUrl;
+        } else if (contentType === "document") {
+            result.documentUrl = mediaUrl;
+        }
+    }
+
+    // Try to parse JSON body for MSG91 media messages
+    if (body && body.startsWith("{")) {
+        try {
+            const parsed = JSON.parse(body);
+
+            // Format: {"attachment_url":"https://...","caption":"..."}
+            if (parsed.attachment_url) {
+                const url = parsed.attachment_url as string;
+                result.displayText = parsed.caption || parsed.text || "";
+                if (url.match(/\.(pdf|doc|docx|xls|xlsx)$/i)) {
+                    result.documentUrl = url;
+                } else {
+                    result.imageUrl = url;
+                }
+                return result;
+            }
+
+            // Format: {"text":"message text","location":{...}}
+            if (parsed.text && !parsed.attachment_url) {
+                result.displayText = parsed.text;
+            }
+
+            // Format: {"url":"https://...","caption":"..."}
+            if (parsed.url && typeof parsed.url === "string" && !parsed.location && !parsed.contacts) {
+                result.displayText = parsed.caption || parsed.text || "";
+                if (parsed.url.match(/\.(jpg|jpeg|png|gif|webp)/i) || parsed.type === "image") {
+                    result.imageUrl = parsed.url;
+                } else {
+                    result.documentUrl = parsed.url;
+                }
+                return result;
+            }
+        } catch {
+            // Not JSON, use as-is
+        }
+    }
+
+    return result;
+}
+
+// Format WhatsApp-style text: *bold*, _italic_, ~strikethrough~
+function formatWhatsAppText(text: string): React.ReactNode[] {
+    if (!text) return [];
+    const parts: React.ReactNode[] = [];
+    const regex = /(\*[^*\n]+\*)|(_[^_\n]+_)|(~[^~\n]+~)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+        }
+        const fullMatch = match[0];
+        const inner = fullMatch.slice(1, -1);
+        if (fullMatch.startsWith("*")) {
+            parts.push(<strong key={match.index}>{inner}</strong>);
+        } else if (fullMatch.startsWith("_")) {
+            parts.push(<em key={match.index}>{inner}</em>);
+        } else if (fullMatch.startsWith("~")) {
+            parts.push(<s key={match.index}>{inner}</s>);
+        }
+        lastIndex = match.index + fullMatch.length;
+    }
+    if (lastIndex < text.length) {
+        parts.push(text.slice(lastIndex));
+    }
+    return parts.length > 0 ? parts : [text];
+}
+
 function MessageBubble({ message }: { message: Message }) {
     const isOutbound = message.direction === "outbound";
     const isNote = message.isInternalNote;
@@ -151,6 +241,16 @@ function MessageBubble({ message }: { message: Message }) {
         minute: "2-digit",
         hour12: true,
     });
+
+    // Parse message body to extract display text and media
+    const { displayText, imageUrl, documentUrl } = parseMessageBody(
+        message.body,
+        message.mediaUrl,
+        message.contentType
+    );
+
+    // Determine the image to show
+    const showImage = imageUrl || (message.contentType === "image" && message.mediaUrl);
 
     return (
         <div
@@ -176,14 +276,24 @@ function MessageBubble({ message }: { message: Message }) {
                     </span>
                 )}
 
-                {/* Content based on type */}
-                {message.contentType === "image" && message.mediaUrl && (
+                {/* Image content (from mediaUrl, parsed JSON, or attachment_url) */}
+                {showImage && (
                     <div className="mb-2 rounded-lg overflow-hidden border border-slate-200/50">
-                        <img src={message.mediaUrl} alt="uploaded content" className="w-full h-auto max-h-60 object-contain" />
+                        <a href={showImage} target="_blank" rel="noopener noreferrer">
+                            <img
+                                src={showImage}
+                                alt="media"
+                                className="w-full h-auto max-h-60 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = "none";
+                                }}
+                            />
+                        </a>
                     </div>
                 )}
 
-                {message.contentType === "document" && (
+                {/* Document content */}
+                {(message.contentType === "document" || documentUrl) && !showImage && (
                     <div
                         className={cn(
                             "flex items-center gap-2 mb-2 p-2 rounded-lg",
@@ -191,9 +301,20 @@ function MessageBubble({ message }: { message: Message }) {
                         )}
                     >
                         <FileText className="w-5 h-5 flex-shrink-0" />
-                        <span className="text-sm truncate">
-                            {message.fileName || "Document"}
-                        </span>
+                        {documentUrl ? (
+                            <a
+                                href={documentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm truncate text-blue-600 hover:underline"
+                            >
+                                {message.fileName || "Download Document"}
+                            </a>
+                        ) : (
+                            <span className="text-sm truncate">
+                                {message.fileName || "Document"}
+                            </span>
+                        )}
                     </div>
                 )}
 
@@ -291,16 +412,19 @@ function MessageBubble({ message }: { message: Message }) {
                     </div>
                 )}
 
-                <p
-                    className={cn(
-                        "text-sm leading-relaxed whitespace-pre-wrap",
-                        isNote
-                            ? "text-amber-900"
-                            : "text-slate-800"
-                    )}
-                >
-                    {message.body}
-                </p>
+                {/* Message text body (parsed from JSON if needed) */}
+                {displayText && (
+                    <p
+                        className={cn(
+                            "text-sm leading-relaxed whitespace-pre-wrap",
+                            isNote
+                                ? "text-amber-900"
+                                : "text-slate-800"
+                        )}
+                    >
+                        {formatWhatsAppText(displayText)}
+                    </p>
+                )}
 
                 <div
                     className={cn(
@@ -359,6 +483,14 @@ export function ChatWindow({ className }: { className?: string }) {
         activeConversationId,
         conversation?.source
     );
+    const markAsRead = useMarkAsRead();
+
+    // Mark conversation as read when it's opened / has unread messages
+    useEffect(() => {
+        if (activeConversationId && conversation && conversation.unreadCount > 0) {
+            markAsRead(activeConversationId);
+        }
+    }, [activeConversationId, conversation?.unreadCount, markAsRead]);
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {

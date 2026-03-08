@@ -125,23 +125,66 @@ export async function POST(request: NextRequest) {
         console.log(`[MSG91 Webhook] Processing message from ${normalizedPhone}`);
 
         // ─── Detect Business App Messages ────────────────────
-        // MSG91 doesn't send webhookType or direction for messages sent from the
-        // WhatsApp Business App. Detect them by checking if the sender phone
-        // matches a known business number.
+        // MSG91 doesn't always send webhookType or direction for messages sent
+        // from the WhatsApp Business App. We use multiple detection mechanisms:
+        //   1. Sender phone matches a known integrated (business) number
+        //   2. Receiver phone matches a known integrated number AND sender doesn't
+        //      (normal inbound — skip, but useful for org resolution)
+        //   3. MSG91 media URL pattern contains a business number
+        //   4. Body contains JSON with attachment_url from MSG91's CDN
         let isSenderBusinessNumber = false;
         let resolvedOrgId = "";
         if (normalizedPhone && !isDeliveryReport) {
-            // Check 1: Look up in integrated_numbers DB table
-            const { data: matchedNumber } = await supabaseAdmin
-                .from("integrated_numbers")
-                .select("number, org_id")
-                .eq("number", normalizedPhone)
-                .eq("active", true)
-                .limit(1)
-                .maybeSingle();
-            if (matchedNumber) {
-                isSenderBusinessNumber = true;
-                resolvedOrgId = matchedNumber.org_id || "";
+            // Check 1: Look up sender in integrated_numbers DB table
+            // Try exact match first, then with/without leading country separators
+            const phonesToCheck = [normalizedPhone];
+            // If the phone doesn't start with common country codes, also try with "91" prefix
+            if (normalizedPhone.length <= 10) {
+                phonesToCheck.push("91" + normalizedPhone);
+            }
+
+            for (const phoneVariant of phonesToCheck) {
+                const { data: matchedNumber } = await supabaseAdmin
+                    .from("integrated_numbers")
+                    .select("number, org_id")
+                    .eq("number", phoneVariant)
+                    .eq("active", true)
+                    .limit(1)
+                    .maybeSingle();
+                if (matchedNumber) {
+                    isSenderBusinessNumber = true;
+                    resolvedOrgId = matchedNumber.org_id || "";
+                    break;
+                }
+            }
+
+            // Check 2: If body is a JSON string with attachment_url containing
+            // an integrated number, it was sent FROM the business app
+            if (!isSenderBusinessNumber && messageBody) {
+                try {
+                    const parsed = typeof messageBody === "string" ? JSON.parse(messageBody) : null;
+                    if (parsed?.attachment_url && typeof parsed.attachment_url === "string") {
+                        // MSG91 CDN URLs contain the business number: /whatsapp-haptik-media/917090166111/...
+                        const urlMatch = parsed.attachment_url.match(/\/(\d{10,15})\//);
+                        if (urlMatch) {
+                            const numberInUrl = urlMatch[1];
+                            const { data: urlNumber } = await supabaseAdmin
+                                .from("integrated_numbers")
+                                .select("number, org_id")
+                                .eq("number", numberInUrl)
+                                .eq("active", true)
+                                .limit(1)
+                                .maybeSingle();
+                            if (urlNumber) {
+                                isSenderBusinessNumber = true;
+                                resolvedOrgId = urlNumber.org_id || "";
+                                console.log(`[MSG91 Webhook] Business number detected from media URL: ${numberInUrl}`);
+                            }
+                        }
+                    }
+                } catch {
+                    // Body isn't JSON, ignore
+                }
             }
 
             if (isSenderBusinessNumber) {

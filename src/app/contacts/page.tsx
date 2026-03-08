@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Users, Search, Mail, Phone, Tag, ChevronLeft, ChevronRight, Upload, Download, X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Users, Search, Mail, Phone, Tag, ChevronLeft, ChevronRight, Upload, Download, FileDown, X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -225,6 +225,7 @@ export default function ContactsPage() {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [showImport, setShowImport] = useState(false);
+    const [exporting, setExporting] = useState(false);
     const { data: settings } = useSettings();
     const pageSize = parseInt(settings?.contacts_page_size || "25") || 25;
     const { data, isLoading, refetch } = useContacts(search, page, pageSize);
@@ -242,6 +243,25 @@ export default function ContactsPage() {
     const showingFrom = total === 0 ? 0 : (page - 1) * limit + 1;
     const showingTo = Math.min(page * limit, total);
 
+    const handleExport = useCallback(async () => {
+        setExporting(true);
+        try {
+            const res = await fetch(`/api/contacts/export${search ? `?search=${encodeURIComponent(search)}` : ""}`);
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch {
+            // silently fail — user sees the button stop spinning
+        } finally {
+            setExporting(false);
+        }
+    }, [search]);
+
     return (
         <div className="h-full overflow-auto p-6 bg-slate-50">
             <div className="max-w-4xl mx-auto">
@@ -258,15 +278,27 @@ export default function ContactsPage() {
                             </p>
                         </div>
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowImport(true)}
-                        className="gap-1.5"
-                    >
-                        <Upload className="w-3.5 h-3.5" />
-                        Import
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleExport}
+                            disabled={exporting || total === 0}
+                            className="gap-1.5"
+                        >
+                            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                            Export CSV
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowImport(true)}
+                            className="gap-1.5"
+                        >
+                            <Upload className="w-3.5 h-3.5" />
+                            Import
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Search */}

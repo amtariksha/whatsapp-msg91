@@ -7,7 +7,20 @@ import { getAppSetting } from "@/lib/settings";
 // Initiate a WhatsApp voice call via MSG91
 export async function POST(request: NextRequest) {
     const { orgId } = getRequestContext(request.headers);
-    const authKey = await getAppSetting("msg91_auth_key", process.env.MSG91_AUTH_KEY || "", orgId);
+
+    // Triple-source auth key resolution
+    let authKey = await getAppSetting("msg91_auth_key", "", orgId);
+    if (!authKey) {
+        const { data: orgRow } = await supabaseAdmin
+            .from("organizations")
+            .select("msg91_auth_key")
+            .eq("id", orgId)
+            .maybeSingle();
+        if (orgRow?.msg91_auth_key) authKey = orgRow.msg91_auth_key;
+    }
+    if (!authKey && process.env.MSG91_AUTH_KEY) {
+        authKey = process.env.MSG91_AUTH_KEY;
+    }
     if (!authKey) {
         return NextResponse.json(
             { error: "MSG91 Auth Key not configured. Set it in Settings or as MSG91_AUTH_KEY env variable." },
@@ -28,11 +41,11 @@ export async function POST(request: NextRequest) {
     try {
         // Initiate voice call via MSG91
         const response = await fetch(
-            "https://api.msg91.com/api/v5/whatsapp/whatsapp-voice-call",
+            "https://control.msg91.com/api/v5/whatsapp/whatsapp-voice-call",
             {
                 method: "POST",
                 headers: {
-                    Authkey: authKey,
+                    authkey: authKey,
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
@@ -78,7 +91,7 @@ export async function POST(request: NextRequest) {
                 .from("conversations")
                 .update({
                     last_message: "📞 Voice call initiated",
-                    last_message_at: new Date().toISOString(),
+                    last_message_time: new Date().toISOString(),
                 })
                 .eq("id", conversationId);
         }

@@ -2,10 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "./api";
-import type { SendMessagePayload, Message, Conversation, CreatePaymentPayload } from "./types";
+import type { SendMessagePayload, Message, Conversation, CreatePaymentPayload, BroadcastsResponse } from "./types";
 import { generateId } from "./utils";
 import { useAppStore } from "./store";
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 
 // ─── WhatsApp Numbers ──────────────────────────────────────
 export function useNumbers() {
@@ -41,6 +41,28 @@ export function useConversation(id: string | null) {
         queryFn: () => api.getConversation(id!),
         enabled: !!id,
     });
+}
+
+// Mark a conversation as read (reset unread count to 0)
+export function useMarkAsRead() {
+    const queryClient = useQueryClient();
+    return useCallback(
+        async (id: string) => {
+            // Optimistically update conversations list to clear badge immediately
+            queryClient.setQueriesData<any>(
+                { queryKey: ["conversations"] },
+                (old: any) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map((c: any) =>
+                        c.id === id ? { ...c, unreadCount: 0 } : c
+                    );
+                }
+            );
+            // Fire the API call (don't await — best effort)
+            api.markConversationAsRead(id).catch(() => {});
+        },
+        [queryClient]
+    );
 }
 
 // ─── Send Message with Optimistic Update ───────────────────
@@ -190,6 +212,39 @@ export function useUpdateContact() {
             queryClient.invalidateQueries({ queryKey: ["conversations"] });
             queryClient.invalidateQueries({ queryKey: ["conversation"] });
             queryClient.invalidateQueries({ queryKey: ["contact", data.id] });
+        },
+    });
+}
+
+// ─── Broadcasts ───────────────────────────────────────────
+export function useBroadcasts(params?: {
+    search?: string;
+    status?: string;
+    days?: string;
+}) {
+    return useQuery({
+        queryKey: ["broadcasts", params],
+        queryFn: () => api.getBroadcasts(params),
+        placeholderData: (prev: BroadcastsResponse | undefined) => prev,
+        refetchInterval: 15000,
+    });
+}
+
+export function useBroadcast(id: string | null) {
+    return useQuery({
+        queryKey: ["broadcast", id],
+        queryFn: () => api.getBroadcast(id!),
+        enabled: !!id,
+    });
+}
+
+export function useCreateBroadcast() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (payload: Parameters<typeof api.createBroadcast>[0]) =>
+            api.createBroadcast(payload),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["broadcasts"] });
         },
     });
 }
