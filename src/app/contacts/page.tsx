@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Users, Search, Mail, Phone, Tag, ChevronLeft, ChevronRight, Upload, Download, FileDown, X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Users, Search, Mail, Phone, Tag, ChevronLeft, ChevronRight, Upload, Download, FileDown, Plus, X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -221,10 +221,132 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
     );
 }
 
+// ─── Add Contact Dialog ─────────────────────────────────
+function AddContactDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+    const [name, setName] = useState("");
+    const [phone, setPhone] = useState("");
+    const [email, setEmail] = useState("");
+    const [tags, setTags] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    const handleSave = async () => {
+        if (!phone.trim()) {
+            setError("Phone number is required");
+            return;
+        }
+        setSaving(true);
+        setError("");
+        try {
+            const res = await fetch("/api/contacts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: name.trim() || phone.trim(),
+                    phone: phone.trim().replace(/^\+/, ""),
+                    email: email.trim() || undefined,
+                    tags: tags.trim() ? tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.error || "Failed to create contact");
+            } else {
+                onDone();
+                onClose();
+            }
+        } catch {
+            setError("Network error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                    <h2 className="text-base font-semibold text-slate-900">Add Contact</h2>
+                    <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="px-5 py-4 space-y-3">
+                    <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Phone Number *</label>
+                        <div className="relative">
+                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                                placeholder="919876543210"
+                                value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
+                                className="pl-9"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Name</label>
+                        <Input
+                            placeholder="John Doe"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Email</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                                placeholder="john@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="pl-9"
+                                type="email"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Tags</label>
+                        <div className="relative">
+                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                                placeholder="vip, premium (comma separated)"
+                                value={tags}
+                                onChange={(e) => setTags(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
+                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                            {error}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+                    <Button variant="outline" size="sm" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+                        {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {saving ? "Saving..." : "Add Contact"}
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function ContactsPage() {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [showImport, setShowImport] = useState(false);
+    const [showAddContact, setShowAddContact] = useState(false);
     const [exporting, setExporting] = useState(false);
     const { data: settings } = useSettings();
     const pageSize = parseInt(settings?.contacts_page_size || "25") || 25;
@@ -298,6 +420,14 @@ export default function ContactsPage() {
                             <Upload className="w-3.5 h-3.5" />
                             Import
                         </Button>
+                        <Button
+                            size="sm"
+                            onClick={() => setShowAddContact(true)}
+                            className="gap-1.5"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Contact
+                        </Button>
                     </div>
                 </div>
 
@@ -316,6 +446,14 @@ export default function ContactsPage() {
                 {showImport && (
                     <ImportDialog
                         onClose={() => setShowImport(false)}
+                        onDone={() => refetch()}
+                    />
+                )}
+
+                {/* Add Contact Dialog */}
+                {showAddContact && (
+                    <AddContactDialog
+                        onClose={() => setShowAddContact(false)}
                         onDone={() => refetch()}
                     />
                 )}
