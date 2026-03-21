@@ -70,12 +70,18 @@ export async function GET(
         }
     }
 
-    // Fetch messages for this conversation
-    const { data: messages } = await supabaseAdmin
+    // Fetch messages for this conversation (org-scoped)
+    let msgQuery = supabaseAdmin
         .from("messages")
         .select("*")
         .eq("conversation_id", id)
         .order("created_at", { ascending: true });
+
+    if (!isSuperAdmin) {
+        msgQuery = msgQuery.eq("org_id", orgId);
+    }
+
+    const { data: messages } = await msgQuery;
 
     const contact =
         conv.contacts && typeof conv.contacts === "object"

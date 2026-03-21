@@ -86,6 +86,12 @@ export async function POST(request: NextRequest) {
                 .maybeSingle();
             if (numRow?.org_id) orgId = numRow.org_id;
             if (numRow?.number) businessPhoneNumber = numRow.number;
+
+            if (!numRow) {
+                console.warn(`[Meta Webhook] phone_number_id ${integratedNumberId} not found in integrated_numbers. Falling back to default org.`);
+            }
+        } else {
+            console.warn("[Meta Webhook] No phone_number_id in webhook payload. Falling back to default org.");
         }
 
         // 2. Handle Status Updates (sent, delivered, read)
@@ -312,6 +318,7 @@ export async function POST(request: NextRequest) {
                 media_url: mediaUrl,
                 source: isEchoMessage ? "mobile_app" : "customer",
                 created_at: timestamp,
+                org_id: orgId,
             });
 
             if (isEchoMessage) {

@@ -245,6 +245,8 @@ ALTER TABLE templates_local ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orga
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
 ALTER TABLE ctwa_config ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
 ALTER TABLE ctwa_logs ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
+ALTER TABLE reminders ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) DEFAULT '00000000-0000-0000-0000-000000000001';
 
 -- Update role check to include super_admin
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
@@ -282,6 +284,8 @@ CREATE INDEX IF NOT EXISTS idx_quick_replies_org ON quick_replies(org_id);
 CREATE INDEX IF NOT EXISTS idx_templates_local_org ON templates_local(org_id);
 CREATE INDEX IF NOT EXISTS idx_payments_org ON payments(org_id);
 CREATE INDEX IF NOT EXISTS idx_ctwa_config_org ON ctwa_config(org_id);
+CREATE INDEX IF NOT EXISTS idx_messages_org ON messages(org_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_org ON reminders(org_id);
 
 -- ─── Org-scoped app_settings ─────────────────────────────────
 -- Add org_id to app_settings so each org can have its own settings.

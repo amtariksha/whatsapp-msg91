@@ -93,7 +93,7 @@ export async function PATCH(
 
         if (addedTags.length > 0) {
             // Fire and forget — don't block the response
-            triggerCAPIForTags(id, addedTags).catch((err) => {
+            triggerCAPIForTags(id, addedTags, orgId).catch((err) => {
                 console.error("[CAPI Trigger] Error:", err);
             });
         }
@@ -105,11 +105,12 @@ export async function PATCH(
 /**
  * Check if newly added tags match CAPI lead/purchase tags and send conversion events.
  */
-async function triggerCAPIForTags(contactId: string, addedTags: string[]) {
-    // Fetch CAPI config
+async function triggerCAPIForTags(contactId: string, addedTags: string[], orgId: string) {
+    // Fetch CAPI config for this org
     const { data: config } = await supabaseAdmin
         .from("ctwa_config")
         .select("capi_enabled, capi_lead_tag, capi_purchase_tag, dataset_id, access_token")
+        .eq("org_id", orgId)
         .limit(1)
         .maybeSingle();
 
@@ -117,11 +118,12 @@ async function triggerCAPIForTags(contactId: string, addedTags: string[]) {
         return; // CAPI not configured or not enabled
     }
 
-    // Find a CTWA conversation for this contact (need ctwa_clid)
+    // Find a CTWA conversation for this contact within the same org (need ctwa_clid)
     const { data: ctwaConv } = await supabaseAdmin
         .from("conversations")
         .select("ctwa_clid")
         .eq("contact_id", contactId)
+        .eq("org_id", orgId)
         .not("ctwa_clid", "is", null)
         .order("created_at", { ascending: false })
         .limit(1)

@@ -288,6 +288,9 @@ export async function POST(request: NextRequest) {
             resolvedOrgId = numRow?.org_id || "";
         }
         const orgId = resolvedOrgId || DEFAULT_ORG_ID;
+        if (!resolvedOrgId) {
+            console.warn(`[MSG91 Webhook] Could not resolve org_id from business phone ${actualBusinessPhone}. Falling back to default org.`);
+        }
 
         // ─── 1. Upsert Contact ─────────────────────────────
         let { data: contact } = await supabaseAdmin
@@ -540,6 +543,7 @@ export async function POST(request: NextRequest) {
             template_name: msgTemplateName,
             status: isExternalOutbound ? "sent" : "delivered",
             source: messageSource,
+            org_id: orgId,
         };
 
         if (locationData) {
